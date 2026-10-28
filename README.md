@@ -4,6 +4,14 @@ A turn-based mech tactics game for the browser, built as a tribute to *Into the 
 
 All art (isometric dioramas, mechs, Vek, effects) and all sound (effects and ambient music) are generated in code. No external assets.
 
+## How it started
+
+What I missed most in the original *Into the Breach* was a way to save the game: manual saves I could come back to. So I decided to try vibe-coding my own version, as an experiment in the spirit of [opus-55-effort-comparison](https://github.com/Barty-Bart/opus-55-effort-comparison).
+
+This was the very first prompt, the one the whole project grew from:
+
+> Build a complete, polished, playable browser clone of Into the Breach. Capture the experience of commanding three distinct mechs in compact turn-based battles, anticipating clearly telegraphed enemy attacks, using positioning and pushes to protect civilian buildings and the power grid, and upgrading your squad through an island campaign with a final battle. Include manual saving and loading with multiple persistent save slots, available between islands. Saved campaigns must survive browser restarts and remain loadable after defeat. Make the implementation decisions yourself. Prioritize an enjoyable game, clear tactical feedback, strong visual presentation and systems that work together. Test it yourself before finishing, and leave it running so I can play it.
+
 ## Run it
 
 ```bash
