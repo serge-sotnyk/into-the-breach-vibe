@@ -16,6 +16,13 @@ This was the very first prompt, the one the whole project grew from:
 
 > Build a complete, polished, playable browser clone of Into the Breach. Capture the experience of commanding three distinct mechs in compact turn-based battles, anticipating clearly telegraphed enemy attacks, using positioning and pushes to protect civilian buildings and the power grid, and upgrading your squad through an island campaign with a final battle. Include manual saving and loading with multiple persistent save slots, available between islands. Saved campaigns must survive browser restarts and remain loadable after defeat. Make the implementation decisions yourself. Prioritize an enjoyable game, clear tactical feedback, strong visual presentation and systems that work together. Test it yourself before finishing, and leave it running so I can play it.
 
+## Play on a phone
+
+Open the online version on your phone and add it to the home screen: "Install app" in Chrome on Android, or Share → "Add to Home Screen" in Safari on iOS. It then starts full screen, works offline and keeps its saves on the device.
+
+- **Orientation.** Battles are played with the phone held sideways; the menus work either way.
+- **Zoom.** Pinch the board to zoom in and drag to move around it. Double-tap empty ground to zoom back out.
+
 ## Run it
 
 ```bash
@@ -104,7 +111,7 @@ The interface scales up on large screens. On a tablet held upright, the panels m
 
 - `src/game/battle/` — the rules engine. `effects.ts` resolves damage, pushes, terrain and status effects; `attacks.ts` turns weapons into effect lists; `ai.ts` plans Vek moves by simulating every option; `turn.ts` runs the turn structure; `preview.ts` simulates outcomes for the UI.
 - `src/game/campaign/` — islands, missions, rewards, shop, hangar, pilots, and save slots.
-- `src/render/` — the isometric canvas renderer, procedural sprites, particles and the animation player that replays recorded battle steps.
+- `src/render/` — the isometric canvas renderer, procedural sprites, particles, the touch camera (pinch zoom and pan) and the animation player that replays recorded battle steps.
 - `src/ui/` — screens (title, squad select, world map, island map, battle HUD, shop, end screens) and modals (hangar, saves, results, settings, help). The battle HUD footprint for each screen shape lives in CSS variables (`--hud-*` in `style.css`), and the board is fitted inside it.
 - `src/i18n/` — dictionaries, plural rules and lookups for data names; the game logic only hands out ids and message keys.
 - `src/audio/` — WebAudio synthesizer for sound effects and music.

@@ -5,6 +5,11 @@ import { LANGS, isLang, t, tn, type StrKey } from '../../i18n';
 import { icon } from '../icons';
 import { canHover, hasTouch } from '../gestures';
 
+/** The installed app already runs full screen; browsers that allow it get a toggle. */
+function canFullscreen(): boolean {
+  return document.fullscreenEnabled && !matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+}
+
 export function openSettings(app: App): void {
   const s = { ...app.settings };
   let h: ModalHandle | null = null;
@@ -12,6 +17,7 @@ export function openSettings(app: App): void {
     <div class="h2">${t('settings.title')}</div>
     <div class="range-row"><span class="label">${t('settings.language')}</span><span class="lang-pick">${LANGS.map((l) => `<button class="btn small ${l.id === s.lang ? '' : 'ghost'}" data-act="lang" data-lang="${l.id}">${l.name}</button>`).join('')}</span></div>
     <div class="range-row"><span class="label">${t('settings.touch')}</span><span class="lang-pick">${(['tap', 'button'] as const).map((m) => `<button class="btn small ${m === s.touchConfirm ? '' : 'ghost'}" data-act="touch" data-mode="${m}">${t(m === 'tap' ? 'settings.touchTap' : 'settings.touchButton')}</button>`).join('')}</span></div>
+    ${canFullscreen() ? `<div class="range-row"><span class="label">${t('settings.screen')}</span><span class="lang-pick"><button class="btn small ${document.fullscreenElement ? '' : 'ghost'}" data-act="fullscreen">${t(document.fullscreenElement ? 'settings.windowed' : 'settings.fullscreen')}</button></span></div>` : ''}
     <div class="range-row"><span class="label">${t('settings.sfx')}</span><input type="range" min="0" max="1" step="0.05" value="${s.sfx}" data-k="sfx"><span>${Math.round(s.sfx * 100)}%</span></div>
     <div class="range-row"><span class="label">${t('settings.music')}</span><input type="range" min="0" max="1" step="0.05" value="${s.music}" data-k="music"><span>${Math.round(s.music * 100)}%</span></div>
     <label class="check-row"><input type="checkbox" data-k="fast" ${s.fast ? 'checked' : ''}> ${t('settings.fast')}</label>
@@ -26,6 +32,12 @@ export function openSettings(app: App): void {
         s.lang = l;
         app.setLang(l, h?.el);
         if (h) h.el.innerHTML = render();
+      },
+      fullscreen: () => {
+        const done = (): void => {
+          if (h) h.el.innerHTML = render();
+        };
+        (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).then(done, done);
       },
       touch: (b) => {
         s.touchConfirm = b.dataset.mode === 'button' ? 'button' : 'tap';

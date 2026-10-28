@@ -121,11 +121,18 @@ export class TitleScreen implements Screen {
     this.resize();
   }
 
-  /** The demo battle fills the space to the right of the menu. */
+  /** The demo battle fills the space to the right of the menu; when the menu takes the whole
+   *  width (phones held upright) it plays dimmed behind it instead. */
   resize(): void {
     const menu = this.app.ui.querySelector('.title-menu');
     const right = menu ? menu.getBoundingClientRect().right : 0;
-    this.app.renderer.setInsets(right + 20, 20, 40, 40);
+    const behind = right > window.innerWidth * 0.6;
+    this.app.renderer.setInsets(behind ? 0 : right + 20, 20, 40, 40);
+    this.app.canvas.style.opacity = behind ? '0.3' : '';
+  }
+
+  unmount(): void {
+    this.app.canvas.style.opacity = '';
   }
 
   frame(dt: number, t: number): void {

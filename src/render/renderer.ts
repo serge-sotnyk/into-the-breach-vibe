@@ -9,6 +9,7 @@ import { BASE, HH, HW, SIDE, screenToTile, surfaceDrop, tileCenter } from './iso
 import { hash01, rgba, shade, theme, type ThemePal } from './themes';
 import { drawBuilding, drawMech, drawMountain, drawPod, drawTrees, drawVek, ell, flame, poly, rrect } from './sprites';
 import { FX } from './fx';
+import { clampCamera, zoomAround, type Camera, type View0 } from './camera';
 import { t as tr, tn } from '../i18n';
 
 export interface UnitOverride {
@@ -121,6 +122,9 @@ export class Renderer {
   ox = 0;
   oy = 0;
   insets = { left: 0, right: 0, top: 0, bottom: 0 };
+  /** touch zoom and pan on top of the fitted view */
+  cam: Camera = { zoom: 1, x: 0, y: 0 };
+  private base: View0 = { scale: 1, ox: 0, oy: 0 };
   fx = new FX();
   /** skip the sky/sea backdrop (thumbnails) */
   transparent = false;
@@ -152,9 +156,39 @@ export class Renderer {
     const ah = Math.max(Math.min(120, this.ch), this.ch - top - bottom);
     const bw = 16 * HW + 40;
     const bh = 16 * HH + BASE + 92;
-    this.scale = Math.max(0.08, Math.min(2.6, Math.min(aw / bw, ah / bh)));
-    this.ox = left + aw / 2;
-    this.oy = top + (ah - (16 * HH + BASE) * this.scale) / 2 + 40 * this.scale;
+    const scale = Math.max(0.08, Math.min(2.6, Math.min(aw / bw, ah / bh)));
+    this.base = { scale, ox: left + aw / 2, oy: top + (ah - (16 * HH + BASE) * scale) / 2 + 40 * scale };
+    this.applyCamera();
+  }
+
+  private applyCamera(): void {
+    const { left, right, top, bottom } = this.insets;
+    const area = { x0: left, y0: top, x1: this.cw - right, y1: this.ch - bottom };
+    this.cam = clampCamera(this.cam, this.base, area, [0, 8 * HH]);
+    this.scale = this.base.scale * this.cam.zoom;
+    this.ox = this.base.ox + this.cam.x;
+    this.oy = this.base.oy + this.cam.y;
+  }
+
+  get zoomed(): boolean {
+    return this.cam.zoom > 1.001;
+  }
+
+  /** Pinch: scale by `factor` around a screen point. */
+  zoomAt(clientX: number, clientY: number, factor: number): void {
+    const r = this.canvas.getBoundingClientRect();
+    this.cam = zoomAround(this.cam, this.base, clientX - r.left, clientY - r.top, factor);
+    this.applyCamera();
+  }
+
+  panBy(dx: number, dy: number): void {
+    this.cam = { ...this.cam, x: this.cam.x + dx, y: this.cam.y + dy };
+    this.applyCamera();
+  }
+
+  resetCamera(): void {
+    this.cam = { zoom: 1, x: 0, y: 0 };
+    this.applyCamera();
   }
 
   toBoard(clientX: number, clientY: number): [number, number] {

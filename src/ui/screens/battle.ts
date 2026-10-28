@@ -31,7 +31,7 @@ import { icon } from '../icons';
 import { cssPx } from '../layout';
 import { HOLD_MS, canHover, classifyTouch } from '../gestures';
 import { openHelp, openSettings } from '../modals/misc';
-import { msg, t, tn } from '../../i18n';
+import { msg, t, tn, type StrKey } from '../../i18n';
 import {
   className,
   hazardDesc,
@@ -50,6 +50,22 @@ import {
 } from '../../i18n/names';
 
 type BannerEv = Extract<AnimEv, { e: 'banner' }>;
+
+/** Locking works only for an installed app on some platforms; elsewhere the rotate hint covers it. */
+type LockableOrientation = ScreenOrientation & { lock?(o: string): Promise<void>; unlock?(): void };
+
+function lockLandscape(): void {
+  const installed = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+  if (installed && matchMedia('(pointer: coarse)').matches) (screen.orientation as LockableOrientation)?.lock?.('landscape').catch(() => undefined);
+}
+
+function unlockOrientation(): void {
+  try {
+    (screen.orientation as LockableOrientation)?.unlock?.();
+  } catch {
+    /* not supported */
+  }
+}
 
 export class BattleScreen implements Screen {
   inGame = true;
@@ -82,8 +98,12 @@ export class BattleScreen implements Screen {
    *  and hoverTile/hoverUnit hold the tapped tile and Vek until the next tap. */
   private touch = !canHover();
   /** The finger currently on the board. */
-  private finger: { id: number; x: number; y: number; t: number; held: boolean } | null = null;
+  private finger: { id: number; x: number; y: number; t: number; held: boolean; dragging: boolean } | null = null;
   private holdTimer = 0;
+  /** Every finger on the board, for pinch zoom. */
+  private fingers = new Map<number, { x: number; y: number }>();
+  private pinch: { d: number; mx: number; my: number } | null = null;
+  private lastTap = { t: 0, tile: -1 };
 
   constructor(private app: App, s: BattleState, private regionId: string) {
     this.s = s;
@@ -106,6 +126,8 @@ export class BattleScreen implements Screen {
       <div class="panel hud-grid" id="h-grid"></div>
       <div class="panel hud-turn" id="h-turn"></div>
       <div class="hud-menu"><button class="btn ghost small" data-act="menu" title="${esc(t('hud.menu'))}">${icon('gear')}</button></div>
+      <div class="hud-objbtn" id="h-objbtn"></div>
+      <div class="rotate-hint" id="h-rotate"></div>
       <div class="panel hud-obj" id="h-obj"></div>
       <div class="hud-roster" id="h-roster"></div>
       <div class="panel hud-unit hidden" id="h-unit"></div>
@@ -115,12 +137,14 @@ export class BattleScreen implements Screen {
     </div>`;
     const hud = root.firstElementChild as HTMLElement;
     hud.style.pointerEvents = 'none';
+    this.paintStatic();
     // Battle actions are ignored while a sequence animates: the live state has already moved on.
     const idle = (fn: (b: HTMLElement) => void) => (b: HTMLElement) => {
       if (!this.anim.busy) fn(b);
     };
     bind(hud, {
       menu: () => this.openMenu(),
+      objs: () => hud.classList.toggle('obj-open'),
       select: idle((b) => {
         const u = unitById(this.s, Number(b.dataset.id));
         if (u) this.select(u);
@@ -164,16 +188,19 @@ export class BattleScreen implements Screen {
     on('pointerup', ((e: PointerEvent) => {
       if (e.pointerType === 'touch') this.onFingerUp(e);
     }) as EventListener);
-    on('pointercancel', (() => this.dropFinger()) as EventListener);
+    on('pointercancel', (() => this.cancelFingers()) as EventListener);
     on('contextmenu', ((e: Event) => e.preventDefault()) as EventListener);
     this.applyInsets();
+    this.app.renderer.resetCamera();
     this.app.renderer.fx.clear();
+    lockLandscape();
     this.hudDirty = true;
   }
 
   unmount(): void {
     window.clearTimeout(this.finishTimer);
-    this.dropFinger();
+    this.cancelFingers();
+    unlockOrientation();
     for (const [t, fn] of this.listeners) this.app.canvas.removeEventListener(t, fn);
     this.listeners = [];
     this.app.canvas.style.cursor = 'default';
@@ -196,6 +223,14 @@ export class BattleScreen implements Screen {
     this.hudDirty = true;
     this.lastTooltip = '';
     this.root.querySelector('[data-act="menu"]')?.setAttribute('title', t('hud.menu'));
+    this.paintStatic();
+  }
+
+  /** HUD text that is not redrawn every frame: the phone objectives toggle and the rotate hint. */
+  private paintStatic(): void {
+    const q = (id: string): HTMLElement | null => this.root.querySelector(`#${id}`);
+    q('h-objbtn')!.innerHTML = `<button class="btn ghost small" data-act="objs">${icon('star')}${t('hud.objectives')}</button>`;
+    q('h-rotate')!.innerHTML = `${icon('rotate')}<div>${t('battle.rotate')}</div>`;
   }
 
   // ------------------------------------------------------------------ frame
@@ -338,29 +373,77 @@ export class BattleScreen implements Screen {
   // ------------------------------------------------------------------ touch
 
   private onFingerDown(e: PointerEvent): void {
-    if (this.app.modalOpen || this.finger) return;
+    if (this.app.modalOpen) return;
     this.touch = true;
     this.mouse.inside = false;
-    this.finger = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), held: false };
+    this.fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.fingers.size === 2) {
+      // a second finger turns the touch into a pinch: no tap, no long press
+      this.dropFinger();
+      this.pinch = this.pinchState();
+      this.app.hideTooltip();
+      return;
+    }
+    if (this.fingers.size > 1 || this.finger) return;
+    this.finger = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), held: false, dragging: false };
     this.holdTimer = window.setTimeout(() => this.onHold(), HOLD_MS);
   }
 
+  private pinchState(): { d: number; mx: number; my: number } {
+    const [a, b] = [...this.fingers.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  }
+
   private onFingerMove(e: PointerEvent): void {
+    const prev = this.fingers.get(e.pointerId);
+    if (!prev) return;
+    this.fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const r = this.app.renderer;
+    if (this.pinch && this.fingers.size >= 2) {
+      const p = this.pinchState();
+      if (this.pinch.d > 0) r.zoomAt(p.mx, p.my, p.d / this.pinch.d);
+      r.panBy(p.mx - this.pinch.mx, p.my - this.pinch.my);
+      this.pinch = p;
+      return;
+    }
     const f = this.finger;
     if (!f || e.pointerId !== f.id) return;
-    if (classifyTouch(e.clientX - f.x, e.clientY - f.y, performance.now() - f.t, false) === 'drag') window.clearTimeout(this.holdTimer);
+    if (!f.dragging && classifyTouch(e.clientX - f.x, e.clientY - f.y, performance.now() - f.t, false) === 'drag') {
+      f.dragging = true;
+      window.clearTimeout(this.holdTimer);
+    }
+    // a zoomed-in board follows a dragging finger
+    if (f.dragging && r.zoomed) r.panBy(e.clientX - prev.x, e.clientY - prev.y);
   }
 
   private onFingerUp(e: PointerEvent): void {
+    this.fingers.delete(e.pointerId);
+    if (this.pinch) {
+      if (this.fingers.size < 2) this.pinch = null;
+      return;
+    }
     const f = this.finger;
     if (!f || e.pointerId !== f.id) return;
     this.dropFinger();
-    if (!f.held && classifyTouch(e.clientX - f.x, e.clientY - f.y, performance.now() - f.t, true) === 'tap') this.tap(this.pointerTile(f.x, f.y));
+    if (!f.held && !f.dragging && classifyTouch(e.clientX - f.x, e.clientY - f.y, performance.now() - f.t, true) === 'tap') this.tap(this.pointerTile(f.x, f.y));
   }
 
   private dropFinger(): void {
     window.clearTimeout(this.holdTimer);
     this.finger = null;
+  }
+
+  private cancelFingers(): void {
+    this.fingers.clear();
+    this.pinch = null;
+    this.dropFinger();
+  }
+
+  /** A tile that reacts to a tap: a unit, or a highlighted move, target or deploy tile. */
+  private actionable(tile: number): boolean {
+    if (tile < 0) return false;
+    const v = this.view;
+    return !!liveAt(this.s, ix(tile), iy(tile)) || !!v.targetTiles?.has(tile) || !!v.moveTiles?.has(tile) || !!v.deployTiles?.has(tile);
   }
 
   /** A long press shows what the mouse would show on hover: the tile's details, and the
@@ -384,6 +467,14 @@ export class BattleScreen implements Screen {
 
   private tap(tile: number): void {
     this.app.hideTooltip();
+    // a double tap on empty ground brings a zoomed board back to the fitted view
+    const now = performance.now();
+    const double = now - this.lastTap.t < 350 && tile === this.lastTap.tile;
+    this.lastTap = { t: now, tile };
+    if (double && this.app.renderer.zoomed && !this.actionable(tile)) {
+      this.app.renderer.resetCamera();
+      return;
+    }
     if (this.anim.busy) return;
     const s = this.s;
     const u = this.selected();
@@ -773,7 +864,7 @@ export class BattleScreen implements Screen {
     const h = this.app.modal(
       `<div class="h2">${t('menu.paused')}</div>
        <p class="dim" style="max-width:420px">${esc(this.title())} · ${t('battle.turnOf', { turn: Math.max(1, this.s.turn), max: this.s.maxTurns })}</p>
-       <div style="display:flex;flex-direction:column;gap:10px;min-width:320px;margin-top:10px">
+       <div style="display:flex;flex-direction:column;gap:10px;min-width:min(320px, 100%);margin-top:10px">
          <button class="btn" data-act="resume">${t('menu.resume')}</button>
          <button class="btn ghost" data-act="help">${icon('info')}${t('common.howToPlay')}</button>
          <button class="btn ghost" data-act="settings">${icon('gear')}${t('common.settings')}</button>
@@ -936,21 +1027,29 @@ export class BattleScreen implements Screen {
       .map((u) => {
         const d = UNITS[u.def];
         const pilot = u.slot >= 0 ? this.app.campaign!.mechs[u.slot]?.pilot : null;
-        let st = '';
-        if (u.dead) st = `<span class="red">${t('roster.destroyed')}</span>`;
-        else if (s.phase === 'deploy') st = u.x >= 0 ? `<span class="green">${t('roster.deployed')}</span>` : `<span class="amber">${t('roster.awaiting')}</span>`;
-        else if (u.frozen) st = `<span class="cyan">${t('roster.frozen')}</span>`;
-        else if (u.acted && !canMove(s, u)) st = `<span class="dim">${t('roster.done')}</span>`;
-        else if (u.moved) st = `<span class="amber">${t('roster.moved')}</span>`;
-        else if (u.webbedBy) st = `<span class="dim">${t('roster.webbed')}</span>`;
-        else st = `<span class="green">${t('roster.ready')}</span>`;
+        // the status colour also tints the card, which is all the compact phone roster shows
+        const [stKey, tone]: [StrKey, string] = u.dead
+          ? ['roster.destroyed', 'red']
+          : s.phase === 'deploy'
+            ? u.x >= 0
+              ? ['roster.deployed', 'green']
+              : ['roster.awaiting', 'amber']
+            : u.frozen
+              ? ['roster.frozen', 'cyan']
+              : u.acted && !canMove(s, u)
+                ? ['roster.done', 'dim']
+                : u.moved
+                  ? ['roster.moved', 'amber']
+                  : u.webbedBy
+                    ? ['roster.webbed', 'dim']
+                    : ['roster.ready', 'green'];
         const title = pilot ? (pilot.ai ? pilotName(pilot) : `${pilot.name} — ${skillName(pilot.skill)}`) : '';
-        return `<div class="panel roster-card ${u.id === this.sel ? 'sel' : ''} ${u.dead ? 'dead' : ''}" data-act="select" data-id="${u.id}" data-hover-unit="${u.id}" title="${esc(title)}">
+        return `<div class="panel roster-card tone-${tone} ${u.id === this.sel ? 'sel' : ''} ${u.dead ? 'dead' : ''}" data-act="select" data-id="${u.id}" data-hover-unit="${u.id}" title="${esc(title)}">
           <div class="pc" data-u="${u.id}"></div><div class="nm">${esc(unitName(d.id))}</div>
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">${pips(Math.max(0, u.hp), u.maxHp)}<span class="st">${st}</span></div></div>`;
+          <div class="pr">${pips(Math.max(0, u.hp), u.maxHp)}<span class="st ${tone}">${t(stKey)}</span></div></div>`;
       })
       .join('');
-    const orderRow = `<div style="display:flex;gap:6px"><button class="btn small ghost" data-act="order" title="${esc(t('hud.orderTitle'))}">${icon('target')}${t(this.showOrder ? 'hud.orderOn' : 'hud.orderOff')}</button>${this.app.debug ? `<button class="btn small ghost" data-act="auto">Auto ${this.autoplay ? 'on' : 'off'}</button>` : ''}</div>`;
+    const orderRow = `<div class="order-row"><button class="btn small ghost" data-act="order" title="${esc(t('hud.orderTitle'))}">${icon('target')}${t(this.showOrder ? 'hud.orderOn' : 'hud.orderOff')}</button>${this.app.debug ? `<button class="btn small ghost" data-act="auto">Auto ${this.autoplay ? 'on' : 'off'}</button>` : ''}</div>`;
     if (this.setHtml(roster, cards + orderRow)) {
       roster.querySelectorAll<HTMLElement>('.pc').forEach((slot) => {
         const u = unitById(s, Number(slot.dataset.u));
@@ -1068,6 +1167,6 @@ export class BattleScreen implements Screen {
       .join('');
     const rwhy = msg(s.phase === 'player' ? repairBlock(s, u) : 'block.notYourTurn');
     const repairBtn = `<button class="wbtn" data-act="repair" ${rwhy ? 'disabled' : ''} title="${esc(t(u.skill === 'medic' ? 'panel.repairTitleMedic' : 'panel.repairTitle'))}">${icon('repair')}<span class="wn"><span class="key-hint">R. </span>${t('panel.repair')}</span><span class="ws">${rwhy ? `<span class="red">${esc(rwhy)}</span>` : t('panel.repairStats', { n: u.skill === 'medic' ? 2 : 1 })}</span></button>`;
-    return `${head}<div class="meta" style="font-size:12px">${pilotLine}</div><div class="weapons">${buttons}${repairBtn}</div>`;
+    return `${head}<div class="meta pilot">${pilotLine}</div><div class="weapons">${buttons}${repairBtn}</div>`;
   }
 }

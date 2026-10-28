@@ -171,6 +171,7 @@ export class App {
     this.ui.className = '';
     this.screen = s;
     this.renderer.setInsets(0, 0, 0, 0);
+    this.renderer.resetCamera();
     s.mount(this.ui);
     this.renderer.resize();
   }

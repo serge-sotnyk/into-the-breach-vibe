@@ -76,10 +76,10 @@ export class IslandScreen implements Screen {
         <div><div class="h2" style="color:${final ? 'var(--red)' : 'var(--amber)'}">${esc(title)}</div><div class="label">${esc(sub)} · ${progress}</div></div>
         <div class="grow"></div>
         ${campaignStats(c)}
-        <button class="btn small" data-act="hangar">${icon('wrench')}${t('common.hangar')}</button>
+        <button class="btn small" data-act="hangar" title="${esc(t('common.hangar'))}">${icon('wrench')}<span class="lbl">${t('common.hangar')}</span></button>
         <button class="btn small ghost" data-act="help">${icon('info')}</button>
         <button class="btn small ghost" data-act="settings">${icon('gear')}</button>
-        <button class="btn small ghost" data-act="title">${t('common.title')}</button>
+        <button class="btn small ghost" data-act="title" title="${esc(t('common.title'))}">${icon('undo')}<span class="lbl">${t('common.title')}</span></button>
       </div>
       <div class="island-layout">
         <div class="island-map" id="imap"></div>
@@ -182,7 +182,7 @@ export class IslandScreen implements Screen {
   }
 
   resize(): void {
-    this.render();
+    requestAnimationFrame(() => this.drawMap(SQUADS[this.app.campaign!.squad].palette));
   }
 
   relocalize(): void {

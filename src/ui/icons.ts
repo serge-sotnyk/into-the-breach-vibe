@@ -1,6 +1,7 @@
 // Inline SVG icon set (24x24, currentColor).
 
 const P: Record<string, string> = {
+  rotate: '<rect x="2.5" y="8.5" width="13" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="2.5" width="7" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".5"/><path d="M8 5.5a5 5 0 0 1 4.5-2.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="m6.6 3.6 1.4 2 2-1.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   bolt: '<path d="M13.5 2 5 13.5h6L9.5 22 19 9.5h-6.2z" fill="currentColor" stroke="#000" stroke-width="1" stroke-linejoin="round"/>',
   star: '<path d="m12 2.5 2.9 6.1 6.6.8-4.9 4.5 1.3 6.6L12 17.2l-5.9 3.3 1.3-6.6-4.9-4.5 6.6-.8z" fill="currentColor" stroke="#000" stroke-width="1" stroke-linejoin="round"/>',
   core: '<path d="M12 2 20.5 7v10L12 22 3.5 17V7z" fill="currentColor" stroke="#000" stroke-width="1"/><path d="M12 7 16 9.5v5L12 17l-4-2.5v-5z" fill="#0b0d12" opacity=".55"/>',

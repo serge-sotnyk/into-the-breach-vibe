@@ -16,6 +16,13 @@
 
 > Build a complete, polished, playable browser clone of Into the Breach. Capture the experience of commanding three distinct mechs in compact turn-based battles, anticipating clearly telegraphed enemy attacks, using positioning and pushes to protect civilian buildings and the power grid, and upgrading your squad through an island campaign with a final battle. Include manual saving and loading with multiple persistent save slots, available between islands. Saved campaigns must survive browser restarts and remain loadable after defeat. Make the implementation decisions yourself. Prioritize an enjoyable game, clear tactical feedback, strong visual presentation and systems that work together. Test it yourself before finishing, and leave it running so I can play it.
 
+## Гра на телефоні
+
+Відкрийте онлайн-версію на телефоні й додайте її на початковий екран: оберіть «Установити застосунок» у Chrome на Android або «Поділитися» → «На початковий екран» у Safari на iOS. Після цього гра запускатиметься на весь екран і працюватиме без інтернету, а збереження залишатимуться на пристрої.
+
+- **Орієнтація.** Під час бою тримайте телефон горизонтально; меню працює в обох орієнтаціях.
+- **Масштаб.** Розведіть два пальці на полі бою, щоб наблизити його, і перетягуйте, щоб оглянути інші ділянки. Двічі торкніться вільної ділянки землі, щоб знову віддалити поле.
+
 ## Запуск
 
 ```bash
@@ -104,7 +111,7 @@ npm run dev
 
 - `src/game/battle/` — рушій ігрових правил. `effects.ts` обробляє шкоду, відштовхування, місцевість та ефекти стану; `attacks.ts` перетворює зброю на списки ефектів; `ai.ts` планує ходи веків, моделюючи всі варіанти; `turn.ts` керує перебігом ходу; `preview.ts` моделює результати для інтерфейсу.
 - `src/game/campaign/` — острови, місії, нагороди, крамниця, ангар, пілоти та слоти збережень.
-- `src/render/` — ізометричне малювання на canvas, процедурні спрайти, частинки та програвач анімацій, що відтворює записані кроки бою.
+- `src/render/` — ізометричне малювання на canvas, процедурні спрайти, частинки, камера із сенсорним керуванням (зміна масштабу двома пальцями та переміщення перетягуванням) і програвач анімацій, що відтворює записані кроки бою.
 - `src/ui/` — екрани (головне меню, вибір загону, мапа світу, мапа острова, бойовий інтерфейс, крамниця, підсумки кампанії) та модальні вікна (ангар, збереження, результати, налаштування, довідка). CSS-змінні (`--hud-*` у `style.css`) задають простір, який займає бойовий інтерфейс за різних пропорцій екрана, а поле бою вписується у відведену область.
 - `src/i18n/` — словники, правила множини та пошук назв ігрових даних; ігрова логіка передає лише ідентифікатори й ключі повідомлень.
 - `src/audio/` — синтезатор WebAudio для звукових ефектів і музики.

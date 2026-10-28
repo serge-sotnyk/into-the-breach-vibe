@@ -46,9 +46,13 @@ button {
   font-family: inherit;
 }
 
+/* notches and rounded corners: keep the game inside the safe area */
 #app {
   position: fixed;
-  inset: 0;
+  top: env(safe-area-inset-top, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
 }
 
 #board {
@@ -1033,6 +1037,18 @@ button {
   text-overflow: ellipsis;
 }
 
+.hud-roster .order-row {
+  display: flex;
+  gap: 6px;
+}
+
+.roster-card .pr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
 .roster-card .st {
   font-size: 10px;
   letter-spacing: 0.14em;
@@ -1554,5 +1570,409 @@ input.text {
   .btn .key,
   .key-hint {
     display: none;
+  }
+}
+
+/* ------------------------------------------------------------ battle extras shown only on phones */
+
+.hud > .hud-objbtn,
+.hud > .rotate-hint {
+  display: none;
+}
+
+/* the battle is played sideways on phones: upright, it asks to turn the phone */
+@media (orientation: portrait) and (max-width: 600px) and (pointer: coarse) {
+  .hud > .rotate-hint {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 32px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    background: var(--bg);
+  }
+  .rotate-hint svg {
+    width: 96px;
+    height: 96px;
+  }
+}
+
+/* ------------------------------------------------------------ battle HUD, phone landscape
+   Under 520px of height everything shrinks into a top strip, a portrait-only roster on the
+   left, the actions on the right and a one-row unit panel at the bottom. Objectives open
+   from a button. */
+
+@media (max-height: 520px) and (orientation: landscape) {
+  :root {
+    --hud-l: 76px;
+    --hud-r: 168px;
+    --hud-t: 48px;
+    --hud-b: 82px;
+  }
+  .hud-grid {
+    left: 8px;
+    top: 6px;
+    min-width: 0;
+    padding: 4px 10px;
+  }
+  .hud-grid .label,
+  .hud-grid .row.dim {
+    display: none;
+  }
+  .hud-grid .row {
+    margin-top: 0;
+  }
+  .hud-grid .gridbar i {
+    width: 7px;
+    height: 14px;
+  }
+  .hud-grid .row span[style] {
+    font-size: 16px !important;
+  }
+  .hud-turn {
+    top: 6px;
+    min-width: 0;
+    padding: 3px 14px 4px;
+  }
+  .hud-turn .big {
+    font-size: 15px;
+  }
+  .hud-turn .phase {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+  }
+  .hud-menu {
+    right: 8px;
+    top: 6px;
+  }
+  .hud > .hud-objbtn {
+    display: block;
+    right: 52px;
+    top: 6px;
+  }
+  .hud-objbtn .btn {
+    padding: 8px 10px;
+  }
+  .hud-obj {
+    display: none;
+    right: 8px;
+    top: 48px;
+    width: 280px;
+    max-height: calc(100% - 140px);
+    overflow: auto;
+    z-index: 3;
+  }
+  .hud.obj-open .hud-obj {
+    display: block;
+  }
+  .hud-roster {
+    left: 8px;
+    top: 48px;
+    width: 60px;
+    gap: 6px;
+  }
+  .hud-roster .roster-card {
+    padding: 4px;
+    grid-template-columns: 1fr;
+    gap: 3px;
+    border-left: 3px solid var(--line-2);
+  }
+  .roster-card .nm,
+  .roster-card .st,
+  .hud-roster .order-row {
+    display: none;
+  }
+  .roster-card canvas {
+    width: 44px;
+    height: 44px;
+    grid-row: auto;
+  }
+  .roster-card .pr {
+    justify-content: center;
+  }
+  .roster-card.tone-green {
+    border-left-color: var(--green);
+  }
+  .roster-card.tone-amber {
+    border-left-color: var(--amber);
+  }
+  .roster-card.tone-red {
+    border-left-color: var(--red);
+  }
+  .roster-card.tone-cyan {
+    border-left-color: var(--cyan);
+  }
+  .hud-unit,
+  .hud-hint,
+  .deploy-panel {
+    left: var(--hud-l);
+    right: var(--hud-r);
+    bottom: 4px;
+    transform: none;
+    min-width: 0;
+    max-width: none;
+    width: auto;
+    padding: 6px 10px;
+  }
+  .hud-unit {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 0 8px;
+    align-items: center;
+  }
+  .hud-unit canvas {
+    width: 36px;
+    height: 36px;
+    grid-row: 1 / 3;
+  }
+  .hud-unit .uname {
+    font-size: 13px;
+    gap: 6px;
+  }
+  .hud-unit .uname .chip {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+  .hud-unit .meta {
+    font-size: 10px;
+    gap: 8px;
+  }
+  .hud-unit .meta.pilot {
+    display: none;
+  }
+  .hud-unit .weapons {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    margin-top: 0;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .hud-unit .enemy-desc {
+    grid-column: 2 / 4;
+    font-size: 11px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .wbtn {
+    min-width: 0;
+    padding: 4px 8px 4px 6px;
+    grid-template-columns: 20px auto;
+    gap: 0 5px;
+  }
+  .wbtn svg {
+    width: 18px;
+    height: 18px;
+  }
+  .wbtn .wn {
+    font-size: 11px;
+  }
+  .wbtn .ws {
+    font-size: 9px;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hud-hint {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .deploy-panel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+  }
+  .deploy-panel .h3 {
+    display: none;
+  }
+  .deploy-panel .dim {
+    margin: 0 !important;
+    font-size: 11px !important;
+    flex: 1;
+  }
+  .deploy-panel .btn.big {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+  .hud-actions {
+    right: 8px;
+    bottom: 4px;
+    width: 152px;
+    gap: 5px;
+  }
+  .hud-actions .btn {
+    padding: 6px 8px;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+  }
+  .hud-actions .btn.big,
+  :lang(uk) .hud-actions .btn.big {
+    font-size: 13px;
+    padding: 9px 8px;
+  }
+  .hud-unit .uname .chip:not(.red) {
+    display: none;
+  }
+  .banner .bar {
+    padding: 6px 30px 8px;
+  }
+  .banner .s {
+    font-size: 11px;
+  }
+  #toast-root {
+    top: 50px;
+  }
+  .tooltip {
+    max-width: 260px;
+    font-size: 12px;
+  }
+}
+
+/* ------------------------------------------------------------ phones: menus, maps and modals */
+
+@media (max-width: 600px), (max-height: 520px) {
+  .topbar {
+    padding: 8px 12px;
+    gap: 8px 10px;
+  }
+  .topbar .h2 {
+    font-size: 20px;
+  }
+  .topbar .lbl,
+  .topbar .topbar-note,
+  .statgroup .label {
+    display: none;
+  }
+  .statgroup .gridbar i {
+    width: 7px;
+    height: 14px;
+  }
+  .screen-body {
+    padding: 12px;
+  }
+  .squad-card {
+    padding: 12px;
+  }
+  .modal {
+    padding: 16px;
+    max-height: calc(92dvh / var(--ui));
+  }
+  .modal .h2 {
+    font-size: 21px;
+  }
+  .slots,
+  .result-grid {
+    min-width: 0;
+  }
+  .slot-row {
+    grid-template-columns: 28px 1fr;
+  }
+  .slot-row .btns {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+  .stats-row {
+    gap: 12px 18px;
+  }
+  .title-foot {
+    display: none;
+  }
+  /* 16px stops iOS from zooming the page when the field gets focus */
+  input.text {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .title-menu {
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+  .island-card,
+  .final-card {
+    grid-template-columns: 1fr;
+  }
+  .island-card canvas,
+  .final-card canvas {
+    width: 100%;
+    height: auto;
+  }
+  .island-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, 42vh) auto;
+    overflow-y: auto;
+  }
+  .briefing {
+    overflow: visible;
+  }
+  .region .pin {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+/* small maps: pins only; the selected region keeps its name (the briefing shows it too) */
+@media (max-width: 600px), (max-height: 520px) {
+  .region .rname,
+  .region .rewards {
+    display: none;
+  }
+  .region.sel .rname {
+    display: block;
+  }
+}
+
+@media (max-height: 520px) {
+  .title-menu {
+    top: 10px;
+    bottom: 10px;
+    transform: none;
+    width: 340px;
+    gap: 8px;
+    overflow-y: auto;
+  }
+  .title-menu .logo {
+    font-size: 40px;
+  }
+  .title-menu .tag {
+    margin: 2px 0 8px;
+    font-size: 11px;
+  }
+  .title-menu .btn.big {
+    padding: 8px 18px;
+    font-size: 15px;
+  }
+  .island-layout {
+    grid-template-columns: 1fr 290px;
+  }
+  .region .pin {
+    width: 26px;
+    height: 26px;
+  }
+  .region .rname {
+    font-size: 10px;
+    padding: 1px 5px;
+  }
+}
+
+/* finger-sized targets */
+@media (pointer: coarse) {
+  .btn.small {
+    min-height: 36px;
+  }
+  .upg {
+    padding: 8px;
   }
 }

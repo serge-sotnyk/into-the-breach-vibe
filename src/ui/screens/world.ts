@@ -59,14 +59,14 @@ export class WorldScreen implements Screen {
       </div>
       <div class="topbar" style="background:rgba(5,8,12,.6)">
         <div class="h3">${t('world.choose')}</div>
-        <div class="dim" style="font-size:13px">${tn('world.each', REGIONS_BEFORE_BOSS)}</div>
+        <div class="dim topbar-note" style="font-size:13px">${tn('world.each', REGIONS_BEFORE_BOSS)}</div>
         <div class="grow"></div>
-        <button class="btn small" data-act="hangar">${icon('wrench')}${t('common.hangar')}</button>
-        <button class="btn small cyan" data-act="save">${icon('save')}${t('world.save')}</button>
-        <button class="btn small ghost" data-act="load">${icon('load')}${t('world.load')}</button>
+        <button class="btn small" data-act="hangar" title="${esc(t('common.hangar'))}">${icon('wrench')}<span class="lbl">${t('common.hangar')}</span></button>
+        <button class="btn small cyan" data-act="save" title="${esc(t('world.save'))}">${icon('save')}<span class="lbl">${t('world.save')}</span></button>
+        <button class="btn small ghost" data-act="load" title="${esc(t('world.load'))}">${icon('load')}<span class="lbl">${t('world.load')}</span></button>
         <button class="btn small ghost" data-act="help">${icon('info')}</button>
         <button class="btn small ghost" data-act="settings">${icon('gear')}</button>
-        <button class="btn small ghost" data-act="title">${t('common.title')}</button>
+        <button class="btn small ghost" data-act="title" title="${esc(t('common.title'))}">${icon('undo')}<span class="lbl">${t('common.title')}</span></button>
       </div>
       <div class="screen-body"><div class="world">${cards}${finalCard}</div></div>
     </div>`);

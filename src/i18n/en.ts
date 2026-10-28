@@ -819,4 +819,9 @@ export const en = {
   'help.touch.hold': '<b>Long-press</b> a tile, unit or button for details.',
   'help.touch.cancel': '<b>Tap empty ground</b> or the armed weapon again to cancel.',
   'help.touch.skip': '<b>Skip</b> speeds through the Vek turn.',
+  // ---------------------------------------------------------------- phones
+  'battle.rotate': 'Turn your phone sideways to play the battle',
+  'settings.screen': 'Screen',
+  'settings.fullscreen': 'Full screen',
+  'settings.windowed': 'Exit full screen',
 };
