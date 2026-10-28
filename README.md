@@ -6,6 +6,8 @@ A turn-based mech tactics game for the browser, built as a tribute to *Into the 
 
 All art (isometric dioramas, mechs, Vek, effects) and all sound (effects and ambient music) are generated in code. No external assets. The game is available in English and Ukrainian.
 
+**Play it online:** https://serge-sotnyk.github.io/into-the-breach-vibe/
+
 ## How it started
 
 What I missed most in the original *Into the Breach* was a way to save the game: manual saves I could come back to. So I decided to try vibe-coding my own version, as an experiment in the spirit of [opus-55-effort-comparison](https://github.com/Barty-Bart/opus-55-effort-comparison).
@@ -22,6 +24,8 @@ npm run dev
 ```
 
 Then open http://127.0.0.1:5173.
+
+Every push to `main` is built, tested and published to GitHub Pages by `.github/workflows/pages.yml`.
 
 Other scripts:
 
