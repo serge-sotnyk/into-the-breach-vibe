@@ -126,7 +126,7 @@ function objectiveFor(kind: ObjKind, tier: number): Objective {
 function briefing(island: IslandDef | typeof FINAL_ISLAND, name: string, kind: MissionKind, boss: string, hazard: string): string {
   const corp = 'corp' in island ? island.corp : 'the resistance';
   const lines: string[] = [];
-  if (kind === 'boss') lines.push(`The ${UNITS[boss].name} has surfaced near ${name}. Destroy it and ${corp} will hand control of the island back to you.`);
+  if (kind === 'boss') lines.push(`The ${UNITS[boss].name} has surfaced near ${name}. Hold the headquarters until it retreats and ${corp} will hand the island back to you — destroy it for a bonus.`);
   else if (kind === 'final1') lines.push('Fight through the caldera rim and hold the landing zone while the Breach Bomb is flown in.');
   else if (kind === 'final2') lines.push('The bomb is armed. Hold the Hive Heart until detonation — whatever it takes.');
   else

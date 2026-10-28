@@ -6,40 +6,26 @@ import { cloneBattle, idx } from '../util';
 import { reachable, unitById } from './board';
 import { resolveWeapon, targetsFor } from './attacks';
 import { computeThreats } from './preview';
-import { damageUnit, previewCtx } from './effects';
 import { canMove, doAttack, doMove, doRepair, endPlayerTurn, repairBlock, weaponBlock, withoutRecording } from './turn';
 
-/** Applies the start-of-enemy-turn fire tick so the evaluation sees burning Vek die before they attack. */
-function afterBurn(s: BattleState): BattleState {
-  if (!s.units.some((u) => u.fire && !u.dead)) return s;
-  const sim = cloneBattle(s);
-  const ctx = previewCtx(0);
-  for (const u of sim.units.slice()) if (u.fire && !u.dead && !u.fireImmune && u.x >= 0) damageUnit(sim, u, 1, { pure: true, how: 'burn' }, ctx);
-  return sim;
-}
-
-function evaluate(s0: BattleState): number {
-  if (s0.phase === 'lost') return -1e6;
-  const s = afterBurn(s0);
+function evaluate(s: BattleState): number {
   if (s.phase === 'lost') return -1e6;
-  let sc = s.grid * 30;
-  for (const u of s.units) {
-    if (u.team === 'enemy') {
-      if (!u.dead) sc -= 6 + u.hp * 3;
-    } else if (u.slot >= 0) {
-      sc += u.dead ? -25 : u.hp * 2;
-    } else if (!u.dead) {
-      sc += 10 + u.hp * 3;
-    }
-  }
+  // predicted hp at the end of the coming enemy phase (threats are cumulative)
+  const final = new Map<number, number>();
+  let loss = 0;
   for (const t of computeThreats(s)) {
-    let loss = 0;
     for (const v of t.outcome.buildingLoss.values()) loss += v;
-    sc -= loss * 22;
-    for (const [id, hp] of t.outcome.hpAfter) {
-      const u = unitById(s, id);
-      if (!u || u.team === 'enemy') continue;
-      sc -= (u.hp - hp) * (u.slot >= 0 ? 3 : 8);
+    for (const [id, hp] of t.outcome.hpAfter) final.set(id, Math.min(final.get(id) ?? Infinity, hp));
+  }
+  let sc = s.grid * 30 - loss * 22;
+  for (const u of s.units) {
+    const hp = Math.max(0, Math.min(u.hp, final.get(u.id) ?? u.hp));
+    if (u.team === 'enemy') {
+      if (!u.dead && hp > 0) sc -= 6 + hp * 3;
+    } else if (u.slot >= 0) {
+      sc += u.dead ? -25 : u.hp * 2 - (u.hp - hp) * 3;
+    } else if (!u.dead) {
+      sc += 10 + u.hp * 3 - (u.hp - hp) * 8;
     }
   }
   for (const tl of s.tiles) if (tl.spawn) sc -= 2;

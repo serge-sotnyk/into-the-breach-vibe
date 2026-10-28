@@ -142,6 +142,7 @@ export class BattleScreen implements Screen {
   }
 
   unmount(): void {
+    window.clearTimeout(this.finishTimer);
     for (const [t, fn] of this.listeners) this.app.canvas.removeEventListener(t, fn);
     this.listeners = [];
     this.app.canvas.style.cursor = 'default';
@@ -245,11 +246,22 @@ export class BattleScreen implements Screen {
 
   // ------------------------------------------------------------------ input
 
+  /**
+   * The tile a pointer position refers to. A unit's sprite stands in for its tile, so
+   * clicking a mech's body selects that mech rather than the ground drawn behind it;
+   * hover previews and clicks both use this, so they always agree.
+   */
+  private pointerTile(clientX: number, clientY: number): number {
+    const p = this.app.renderer.pick(clientX, clientY);
+    const u = p.unit ? unitById(this.s, p.unit) : undefined;
+    return u && u.x >= 0 ? idx(u.x, u.y) : p.tile;
+  }
+
   private onMouseMove(e: MouseEvent): void {
     this.mouse = { x: e.clientX, y: e.clientY, inside: true };
-    const p = this.app.renderer.pick(e.clientX, e.clientY);
+    const p = { tile: this.pointerTile(e.clientX, e.clientY) };
     const tileUnit = p.tile >= 0 ? liveAt(this.s, ix(p.tile), iy(p.tile)) ?? unitAt(this.s, ix(p.tile), iy(p.tile)) : undefined;
-    const unit = tileUnit?.id ?? p.unit;
+    const unit = tileUnit?.id ?? 0;
     if (p.tile !== this.hoverTile || unit !== this.hoverUnit) {
       if (p.tile !== this.hoverTile && p.tile >= 0 && this.view.targetTiles?.has(p.tile)) this.app.sound.play('hover');
       this.hoverTile = p.tile;
@@ -273,11 +285,10 @@ export class BattleScreen implements Screen {
     if (this.anim.busy) {
       return;
     }
-    const p = this.app.renderer.pick(e.clientX, e.clientY);
-    this.click(p.tile, p.unit);
+    this.click(this.pointerTile(e.clientX, e.clientY));
   }
 
-  private click(tile: number, spriteUnit: number): void {
+  private click(tile: number): void {
     const s = this.s;
     const tileUnit = tile >= 0 ? (liveAt(s, ix(tile), iy(tile)) ?? unitAt(s, ix(tile), iy(tile))) : undefined;
     const u = this.selected();
@@ -296,8 +307,7 @@ export class BattleScreen implements Screen {
         }
         return;
       }
-      const other = tileUnit ?? (spriteUnit ? unitById(s, spriteUnit) : undefined);
-      if (other && isMech(other)) this.select(other);
+      if (tileUnit && isMech(tileUnit)) this.select(tileUnit);
       return;
     }
     if (s.phase !== 'player') return;
@@ -307,9 +317,8 @@ export class BattleScreen implements Screen {
         this.fire(u, this.slot, tile);
         return;
       }
-      const other = tileUnit ?? (spriteUnit ? unitById(s, spriteUnit) : undefined);
-      if (other && this.controllable(other) && other !== u) {
-        this.select(other);
+      if (tileUnit && this.controllable(tileUnit) && tileUnit !== u) {
+        this.select(tileUnit);
         return;
       }
       this.slot = -1;
@@ -323,9 +332,8 @@ export class BattleScreen implements Screen {
         return;
       }
     }
-    const other = tileUnit ?? (spriteUnit ? unitById(s, spriteUnit) : undefined);
-    if (other && other.x >= 0) {
-      this.select(other);
+    if (tileUnit && tileUnit.x >= 0) {
+      this.select(tileUnit);
       return;
     }
     this.sel = 0;
@@ -581,6 +589,7 @@ export class BattleScreen implements Screen {
   }
 
   private afterIdle: (() => void) | null = null;
+  private finishTimer = 0;
 
   /** Logic resolves before the animation plays: record a defeat immediately so it can't be replayed. */
   private resolved(): void {
@@ -596,7 +605,10 @@ export class BattleScreen implements Screen {
     if ((this.s.phase === 'won' || this.s.phase === 'lost') && !this.ended) {
       this.ended = true;
       this.autoplay = false;
-      setTimeout(() => this.app.finishBattle(this.s, this.regionId), 900);
+      // the results come up after a beat; a screen that was left in the meantime never reports
+      this.finishTimer = window.setTimeout(() => {
+        if (this.app.screen === this) this.app.finishBattle(this.s, this.regionId);
+      }, 900);
     }
   }
 

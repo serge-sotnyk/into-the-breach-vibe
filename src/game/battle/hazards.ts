@@ -1,7 +1,7 @@
 import { DIRS, DX, DY, type BattleState } from '../types';
 import { idx, inb, ix, iy, rint, shuffle } from '../util';
-import { isGroundish, isObstacle, liveAt, unitAt } from './board';
-import { damageTile, enterTile, type Ctx } from './effects';
+import { isGroundish, isMech, isObstacle, liveAt, unitAt } from './board';
+import { damageTile, damageUnit, enterTile, psionActive, type Ctx } from './effects';
 
 function sample(s: BattleState, pool: number[], n: number): number[] {
   return shuffle(s, pool.slice()).slice(0, n);
@@ -120,4 +120,28 @@ export function applyHazards(s: BattleState, ctx: Ctx): void {
     }
     if (s.phase === 'lost' && !ctx.preview) return;
   }
+}
+
+/**
+ * Start of the enemy phase, before any Vek attacks: burning units take 1 damage, a
+ * Tyrant Psion lashes every mech, then the mission's hazard strikes its marked tiles.
+ * Shared by the real turn and by the threat preview so both agree.
+ */
+export function environmentPhase(s: BattleState, ctx: Ctx): void {
+  const stop = (): boolean => s.phase === 'lost' && !ctx.preview;
+  for (const u of s.units.slice()) {
+    if (u.dead || !u.fire || u.fireImmune || u.x < 0 || !s.units.includes(u)) continue;
+    ctx.rec({ e: 'tick', x: u.x, y: u.y, what: 'burn' });
+    damageUnit(s, u, 1, { pure: true, how: 'burn' }, ctx);
+    if (stop()) return;
+  }
+  if (psionActive(s, 'tyrant')) {
+    for (const u of s.units.slice()) {
+      if (!isMech(u) || u.dead || u.x < 0) continue;
+      ctx.rec({ e: 'tick', x: u.x, y: u.y, what: 'psychic' });
+      damageUnit(s, u, 1, { pure: true, how: 'psychic' }, ctx);
+      if (stop()) return;
+    }
+  }
+  applyHazards(s, ctx);
 }

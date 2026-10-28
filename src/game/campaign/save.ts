@@ -44,13 +44,12 @@ export function setStorage(st: Storage | null): void {
   store = st;
 }
 
+/** The browser's storage if it can be read. Writes may still fail (full quota). */
 function storage(): Storage | null {
   if (store !== undefined) return store;
   try {
     const ls = globalThis.localStorage;
-    const probe = `${PREFIX}.probe`;
-    ls.setItem(probe, '1');
-    ls.removeItem(probe);
+    ls.getItem(`${PREFIX}.probe`);
     store = ls;
   } catch {
     store = null;
@@ -58,27 +57,89 @@ function storage(): Storage | null {
   return store;
 }
 
+/** Whether new saves can be written right now (checked each time; the quota may change). */
 export function storageAvailable(): boolean {
-  return !!storage();
+  const st = storage();
+  if (!st) return false;
+  try {
+    const probe = `${PREFIX}.probe`;
+    st.setItem(probe, '1');
+    st.removeItem(probe);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const slotKey = (i: number): string => `${PREFIX}.slot.${i}`;
 const RESUME_KEY = `${PREFIX}.resume`;
 
+const isArr = (v: unknown): v is unknown[] => Array.isArray(v);
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
 export function validCampaign(c: unknown): c is Campaign {
-  if (!c || typeof c !== 'object') return false;
+  if (!isObj(c)) return false;
   const o = c as Partial<Campaign>;
   return (
-    typeof o.version === 'number' &&
+    isNum(o.version) &&
     o.version <= CAMPAIGN_VERSION &&
     typeof o.squad === 'string' &&
     !!SQUADS[o.squad] &&
-    Array.isArray(o.mechs) &&
+    isArr(o.mechs) &&
     o.mechs.length === 3 &&
-    Array.isArray(o.islands) &&
-    typeof o.grid === 'number' &&
-    typeof o.gridMax === 'number' &&
-    typeof o.rng === 'number' &&
+    o.mechs.every((m) => isObj(m) && typeof m.chassis === 'string' && isObj(m.pilot) && isArr(m.weapons)) &&
+    isArr(o.islands) &&
+    o.islands.every((i) => isObj(i) && isArr(i.regions)) &&
+    isArr(o.reserve) &&
+    isArr(o.inventory) &&
+    isArr(o.shop) &&
+    isArr(o.finalMissions) &&
+    isArr(o.usedPilots) &&
+    isObj(o.stats) &&
+    isNum(o.grid) &&
+    isNum(o.gridMax) &&
+    isNum(o.rng) &&
+    typeof o.phase === 'string'
+  );
+}
+
+function validMeta(m: unknown): m is SlotMeta {
+  return (
+    isObj(m) &&
+    isNum(m.savedAt) &&
+    typeof m.label === 'string' &&
+    isNum(m.secured) &&
+    isNum(m.grid) &&
+    isNum(m.gridMax) &&
+    isNum(m.rep) &&
+    isNum(m.cores) &&
+    typeof m.squad === 'string' &&
+    typeof m.difficulty === 'string' &&
+    isArr(m.pilots) &&
+    isNum(m.playMs)
+  );
+}
+
+/** Structural check for a battle restored from the auto-resume save. */
+export function validBattle(b: unknown): b is BattleState {
+  if (!isObj(b)) return false;
+  const o = b as Partial<BattleState>;
+  return (
+    isArr(o.tiles) &&
+    o.tiles.length === 64 &&
+    o.tiles.every((t) => isObj(t) && typeof t.t === 'string') &&
+    isArr(o.units) &&
+    o.units.every((u) => isObj(u) && isNum(u.id) && isNum(u.x) && isNum(u.y) && isNum(u.hp) && typeof u.def === 'string' && isArr(u.weapons)) &&
+    isArr(o.objectives) &&
+    isArr(o.deployZone) &&
+    isArr(o.spawnPlan) &&
+    isArr(o.enemyPool) &&
+    isObj(o.stats) &&
+    isNum(o.turn) &&
+    isNum(o.maxTurns) &&
+    isNum(o.grid) &&
+    isNum(o.rng) &&
     typeof o.phase === 'string'
   );
 }
@@ -112,7 +173,12 @@ export function readSlot(i: number): SlotRead {
   if (!raw) return { status: 'empty' };
   try {
     const data = JSON.parse(raw) as SlotData;
-    if (!data || !data.meta || !validCampaign(data.campaign)) return { status: 'corrupt', reason: 'Unrecognised save data' };
+    if (!isObj(data) || !validCampaign(data.campaign)) return { status: 'corrupt', reason: 'Unrecognised save data' };
+    // the campaign is what matters; damaged slot metadata is rebuilt from it
+    if (!validMeta(data.meta)) {
+      const old: Record<string, unknown> = isObj(data.meta) ? data.meta : {};
+      data.meta = { ...metaFor(data.campaign, typeof old.label === 'string' ? old.label : ''), savedAt: isNum(old.savedAt) ? old.savedAt : 0 };
+    }
     return { status: 'ok', data };
   } catch {
     return { status: 'corrupt', reason: 'Save data is damaged' };
@@ -163,8 +229,11 @@ export function readResume(): ResumeData | null {
     const raw = storage()?.getItem(RESUME_KEY);
     if (!raw) return null;
     const d = JSON.parse(raw) as ResumeData;
-    if (!validCampaign(d.campaign)) return null;
+    if (!isObj(d) || !validCampaign(d.campaign)) return null;
     if (d.campaign.phase === 'defeat' || d.campaign.phase === 'victory') return null;
+    // a damaged battle snapshot falls back to resuming between missions
+    if (d.battle != null && !validBattle(d.battle)) d.battle = null;
+    if (typeof d.regionId !== 'string') d.regionId = '';
     return d;
   } catch {
     return null;

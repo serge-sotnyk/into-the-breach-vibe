@@ -141,7 +141,7 @@ export function applyEffect(s: BattleState, e: Effect, ctx: Ctx): void {
       }
       const u = makeUnit(s, e.def, e.x, e.y);
       ctx.rec({ e: 'spawn', id: u.id, x: e.x, y: e.y });
-      if (t.fire && !u.fireImmune) u.fire = true;
+      enterTile(s, u, ctx);
       return;
     }
     case 'shield': {

@@ -39,7 +39,7 @@ export function openSaves(app: App, mode: 'save' | 'load'): void {
         return `<div class="slot-row ${filled ? '' : 'empty'}"><div class="num">${i + 1}</div><div class="info">${slotInfo(r)}</div><div class="btns">${btns.join('')}</div></div>`;
       })
       .join('');
-    const warn = storageAvailable() ? '' : '<p class="red">Browser storage is unavailable, so saves cannot persist. Disable private browsing to save.</p>';
+    const warn = storageAvailable() ? '' : `<p class="red">Browser storage can't be written right now (private browsing or full storage), so new saves won't persist. Existing saves can still be loaded.</p>`;
     return `<div class="h2">${mode === 'save' ? 'Save Campaign' : 'Load Campaign'}</div>
       <p class="dim" style="margin:6px 0 14px">${mode === 'save' ? 'Saves persist in this browser across restarts and survive a lost timeline.' : 'Saved campaigns resume on the world map between islands.'}</p>
       ${warn}

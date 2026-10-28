@@ -1024,7 +1024,7 @@ export class Renderer {
       if (th.cancel) {
         const [cx, cy] = tileCenter(e.x, e.y);
         ctx.globalAlpha = 0.9;
-        this.badge(cx + 20, cy - spriteHeight(e) - 4, th.cancel === 'smoke' ? 'SMOKED' : th.cancel === 'frozen' ? 'FROZEN' : th.cancel === 'water' ? 'SUBMERGED' : 'NO TARGET', '#38404c', '#cfe3f2', 10);
+        this.badge(cx + 20, cy - spriteHeight(e) - 4, th.cancel === 'smoke' ? 'SMOKED' : th.cancel === 'frozen' ? 'FROZEN' : th.cancel === 'water' ? 'SUBMERGED' : th.cancel === 'dead' ? 'DIES FIRST' : 'NO TARGET', '#38404c', '#cfe3f2', 10);
         ctx.globalAlpha = 1;
         continue;
       }

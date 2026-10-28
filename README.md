@@ -42,7 +42,7 @@ Add `?debug` to the URL for debug keys in battle: `P` toggles the auto-pilot, `F
 
 ### Campaign
 
-Four islands (Verdant Reach, Dune Sprawl, Glacier Spire, Cinder Works) with their own terrain, Vek, hazards and leader. Defend three regions, then defeat the island's Hive leader to secure it. Bonus objectives pay out reputation, grid power, reactor cores and new pilots. After each island, spend reputation in the shop; reactor cores power weapons and upgrades in the Hangar. Pilots level up but die with their mech. Secure two islands to unlock the Hive Caldera final assault: hold the rim, then defend the Breach Bomb against the Hive Tyrant.
+Four islands (Verdant Reach, Dune Sprawl, Glacier Spire, Cinder Works) with their own terrain, Vek, hazards and leader. Defend three regions, then hold the island's headquarters against its Hive leader to secure it (destroying the leader is a bonus objective). Bonus objectives pay out reputation, grid power, reactor cores and new pilots. After each island, spend reputation in the shop; reactor cores power weapons and upgrades in the Hangar. Pilots level up but die with their mech. Secure two islands to unlock the Hive Caldera final assault: hold the rim, then defend the Breach Bomb against the Hive Tyrant.
 
 ### Saving
 

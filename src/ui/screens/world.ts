@@ -58,7 +58,7 @@ export class WorldScreen implements Screen {
       </div>
       <div class="topbar" style="background:rgba(5,8,12,.6)">
         <div class="h3">Choose an island to defend</div>
-        <div class="dim" style="font-size:13px">Each island: defend 3 regions, then destroy its Hive leader.</div>
+        <div class="dim" style="font-size:13px">Each island: defend 3 regions, then hold out against its Hive leader.</div>
         <div class="grow"></div>
         <button class="btn small" data-act="hangar">${icon('wrench')}Hangar</button>
         <button class="btn small cyan" data-act="save">${icon('save')}Save Game</button>

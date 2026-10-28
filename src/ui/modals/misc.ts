@@ -52,7 +52,7 @@ export function openHelp(app: App): void {
         <p>${icon('web')} <b>Webbed</b>: cannot move until the webbing Vek dies or is pushed away.</p>
       </div>
       <h3>Campaign</h3>
-      <p>Pick an island, defend three regions, then defeat the island's Hive leader to secure it. Bonus objectives earn <b class="amber">reputation</b> ${icon('star')} (spent in the shop after each island), <b class="amber">grid power</b> ${icon('bolt')} and <b class="cyan">reactor cores</b> ${icon('core')} (power weapons and upgrades in the Hangar). Pilots gain experience and level up — but die with their mech. Secure two islands to unlock the final assault on the Hive Caldera.</p>
+      <p>Pick an island, defend three regions, then hold the headquarters against the island's Hive leader to secure it — destroying the leader is a bonus objective. Bonus objectives earn <b class="amber">reputation</b> ${icon('star')} (spent in the shop after each island), <b class="amber">grid power</b> ${icon('bolt')} and <b class="cyan">reactor cores</b> ${icon('core')} (power weapons and upgrades in the Hangar). Pilots gain experience and level up — but die with their mech. Secure two islands to unlock the final assault on the Hive Caldera.</p>
       <p><b>Saving:</b> manual saves (6 slots) are available on the world map between islands and persist after defeat. Your current run also auto-saves so you can <b>Continue</b> after closing the browser.</p>
       <h3>Controls</h3>
       <div class="cols">

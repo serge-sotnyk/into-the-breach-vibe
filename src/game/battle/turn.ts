@@ -20,7 +20,7 @@ import {
 import { effectsFor, enemyEffects, planTarget, resolveWeapon, targetsFor } from './attacks';
 import { applyEffects, damageUnit, enterTile, makeUnit, psionActive, type Ctx } from './effects';
 import { planEnemies } from './ai';
-import { applyHazards, markHazards } from './hazards';
+import { environmentPhase, markHazards } from './hazards';
 
 /** Phase is mutated by nested calls, so read it through a function to defeat narrowing. */
 export const isLost = (s: BattleState): boolean => s.phase === 'lost';
@@ -233,24 +233,8 @@ export function endPlayerTurn(s: BattleState): Step[] {
   s.phase = 'enemy';
   env.rec({ e: 'banner', text: 'ENEMY TURN', sub: s.turn === s.maxTurns ? 'Last attack before the Vek retreat' : '', tone: 'enemy' });
 
-  // 1. fire burns every unit standing in it
-  for (const u of s.units.slice()) {
-    if (u.dead || !u.fire || u.fireImmune || u.x < 0 || !s.units.includes(u)) continue;
-    env.rec({ e: 'tick', x: u.x, y: u.y, what: 'burn' });
-    damageUnit(s, u, 1, { pure: true, how: 'burn' }, env);
-    if (isLost(s)) return finish(s, steps, env);
-  }
-  // 2. tyrant psion lashes the squad
-  if (psionActive(s, 'tyrant')) {
-    for (const u of s.units.slice()) {
-      if (!isMech(u) || u.dead || u.x < 0) continue;
-      env.rec({ e: 'tick', x: u.x, y: u.y, what: 'psychic' });
-      damageUnit(s, u, 1, { pure: true, how: 'psychic' }, env);
-      if (isLost(s)) return finish(s, steps, env);
-    }
-  }
-  // 3. environment
-  applyHazards(s, env);
+  // 1-3. fire, the tyrant psion and the mission hazard
+  environmentPhase(s, env);
   if (isLost(s)) return finish(s, steps, env);
 
   // 4. queued Vek attacks, in order
@@ -342,8 +326,20 @@ export function repairBlock(s: BattleState, u: Unit): string {
   if (u.frozen) return 'Frozen';
   if (u.acted) return 'Already acted';
   if (inSmoke(s, u)) return 'In smoke';
-  if (u.hp >= u.maxHp && !u.fire && !u.acid) return 'Undamaged';
-  return '';
+  const hurt = (x: Unit): boolean => x.hp < x.maxHp || x.fire || x.acid;
+  if (hurt(u)) return '';
+  // a Field Medic's repair also patches up adjacent allies
+  if (u.skill === 'medic' && medicPatients(s, u).some(hurt)) return '';
+  return 'Undamaged';
+}
+
+function medicPatients(s: BattleState, u: Unit): Unit[] {
+  const out: Unit[] = [];
+  for (const d of DIRS) {
+    const o = liveAt(s, u.x + DX[d], u.y + DY[d]);
+    if (o && o.team !== 'enemy' && friendly(o, u)) out.push(o);
+  }
+  return out;
 }
 
 export function doMove(s: BattleState, u: Unit, ti: number): Step[] {
@@ -402,9 +398,7 @@ export function doRepair(s: BattleState, u: Unit): Step[] {
   afterAction(u);
   ctx.rec({ e: 'heal', x: u.x, y: u.y, amt: heal });
   if (u.skill === 'medic') {
-    for (const d of DIRS) {
-      const o = liveAt(s, u.x + DX[d], u.y + DY[d]);
-      if (!o || !friendly(o, u) || o.team === 'enemy') continue;
+    for (const o of medicPatients(s, u)) {
       o.hp = Math.min(o.maxHp, o.hp + 1);
       o.fire = false;
       o.acid = false;
