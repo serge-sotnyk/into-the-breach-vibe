@@ -284,7 +284,8 @@ export function createBattle(spec: MissionSpec, setup: BattleSetup): BattleState
     const center = enemyTiles.filter((i) => ix(i) >= 2 && ix(i) <= 5);
     const i = center.length ? center[0] : take();
     if (i !== undefined) {
-      enemyTiles.splice(enemyTiles.indexOf(i), 1);
+      const at = enemyTiles.indexOf(i);
+      if (at >= 0) enemyTiles.splice(at, 1);
       makeUnit(s, spec.boss, ix(i), iy(i));
     }
   }

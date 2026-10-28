@@ -200,6 +200,11 @@ export function damageTile(s: BattleState, x: number, y: number, amt: number, o:
   }
   let ignite = !!o.fire;
   if (amt > 0) ignite = affectTerrain(s, x, y, amt, o, ctx) || ignite;
+  if (amt > 0 && t.pod) {
+    t.pod = false;
+    s.stats.pod = 'destroyed';
+    ctx.rec({ e: 'pod', x, y, what: 'destroy' });
+  }
   const affectUnit = !unitBlocked && !allySafe;
   if (ignite) igniteTile(s, x, y, ctx, affectUnit);
   if (o.smoke) {
@@ -499,11 +504,6 @@ function affectTerrain(s: BattleState, x: number, y: number, amt: number, o: Dmg
       return false;
     }
     default:
-      if (t.pod) {
-        t.pod = false;
-        s.stats.pod = 'destroyed';
-        ctx.rec({ e: 'pod', x, y, what: 'destroy' });
-      }
       return false;
   }
 }

@@ -46,6 +46,14 @@ function pickTiles(s: BattleState): number[] {
   return [];
 }
 
+function dropPod(s: BattleState, x: number, y: number, ctx: Ctx): void {
+  const t = s.tiles[idx(x, y)];
+  if (!t.pod) return;
+  t.pod = false;
+  s.stats.pod = 'destroyed';
+  ctx.rec({ e: 'pod', x, y, what: 'destroy' });
+}
+
 export function markHazards(s: BattleState, ctx: Ctx): void {
   for (const t of s.tiles) t.hazard = false;
   if (!s.hazard) return;
@@ -75,7 +83,7 @@ export function applyHazards(s: BattleState, ctx: Ctx): void {
           t.t = 'water';
           t.fire = false;
           t.acid = false;
-          t.pod = false;
+          dropPod(s, x, y, ctx);
           ctx.rec({ e: 'terrain', x, y, what: 'flood' });
           const u = liveAt(s, x, y);
           if (u) enterTile(s, u, ctx);
@@ -89,7 +97,7 @@ export function applyHazards(s: BattleState, ctx: Ctx): void {
           t.fire = false;
           t.acid = false;
           t.smoke = 0;
-          t.pod = false;
+          dropPod(s, x, y, ctx);
           ctx.rec({ e: 'terrain', x, y, what: 'collapse' });
           const u = liveAt(s, x, y);
           if (u) enterTile(s, u, ctx);

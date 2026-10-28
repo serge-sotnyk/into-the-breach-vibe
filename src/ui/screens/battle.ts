@@ -92,18 +92,22 @@ export class BattleScreen implements Screen {
     </div>`;
     const hud = root.firstElementChild as HTMLElement;
     hud.style.pointerEvents = 'none';
+    // Battle actions are ignored while a sequence animates: the live state has already moved on.
+    const idle = (fn: (b: HTMLElement) => void) => (b: HTMLElement) => {
+      if (!this.anim.busy) fn(b);
+    };
     bind(hud, {
       menu: () => this.openMenu(),
-      select: (b) => {
+      select: idle((b) => {
         const u = unitById(this.s, Number(b.dataset.id));
         if (u) this.select(u);
-      },
-      weapon: (b) => this.arm(Number(b.dataset.slot)),
-      repair: () => this.repair(),
-      undo: () => this.undoMove(),
-      reset: () => void this.resetTurn(),
-      end: () => void this.endTurn(),
-      deploy: () => this.confirmDeploy(),
+      }),
+      weapon: idle((b) => this.arm(Number(b.dataset.slot))),
+      repair: idle(() => this.repair()),
+      undo: idle(() => this.undoMove()),
+      reset: idle(() => void this.resetTurn()),
+      end: idle(() => void this.endTurn()),
+      deploy: idle(() => this.confirmDeploy()),
       order: () => {
         this.showOrder = !this.showOrder;
         this.hudDirty = true;
@@ -215,6 +219,7 @@ export class BattleScreen implements Screen {
     if (s.phase !== 'player') return;
     for (const x of s.units) if (this.controllable(x) && x.x >= 0 && (canMove(s, x) || canAct(s, x))) v.idleGlow.add(x.id);
     if (!this.controllable(u) || u.x < 0) return;
+    if (this.slot >= 0 && !u.weapons[this.slot]) this.slot = -1;
     if (this.slot >= 0) {
       const w = resolveWeapon(u.weapons[this.slot], u);
       const targets = targetsFor(s, u, w);
@@ -296,7 +301,7 @@ export class BattleScreen implements Screen {
       return;
     }
     if (s.phase !== 'player') return;
-    if (this.controllable(u) && this.slot >= 0) {
+    if (this.controllable(u) && this.slot >= 0 && u.weapons[this.slot]) {
       const w = resolveWeapon(u.weapons[this.slot], u);
       if (tile >= 0 && targetsFor(s, u, w).includes(tile)) {
         this.fire(u, this.slot, tile);
@@ -411,7 +416,7 @@ export class BattleScreen implements Screen {
 
   private arm(slot: number): void {
     const u = this.selected();
-    if (!this.controllable(u) || this.s.phase !== 'player') return;
+    if (this.anim.busy || !this.controllable(u) || this.s.phase !== 'player') return;
     const why = weaponBlock(this.s, u, slot);
     if (why) {
       this.app.toast(why, true);
@@ -431,6 +436,7 @@ export class BattleScreen implements Screen {
     if (!steps.length) return;
     this.undo.push({ snap: before, id: u.id });
     this.anim.play(before, steps);
+    this.resolved();
     this.slot = -1;
     this.hudDirty = true;
     this.afterIdle = () => {
@@ -446,13 +452,14 @@ export class BattleScreen implements Screen {
     this.undo = [];
     this.slot = -1;
     this.anim.play(before, steps);
+    this.resolved();
     this.hudDirty = true;
     this.afterIdle = () => this.selectNextReady(u.id);
   }
 
   private repair(): void {
     const u = this.selected();
-    if (!this.controllable(u) || this.s.phase !== 'player') return;
+    if (this.anim.busy || !this.controllable(u) || this.s.phase !== 'player') return;
     const why = repairBlock(this.s, u);
     if (why) {
       this.app.toast(why, true);
@@ -464,6 +471,7 @@ export class BattleScreen implements Screen {
     this.undo = [];
     this.slot = -1;
     this.anim.play(before, steps);
+    this.resolved();
     this.hudDirty = true;
     this.afterIdle = () => this.selectNextReady(u.id);
   }
@@ -521,6 +529,7 @@ export class BattleScreen implements Screen {
     this.sel = 0;
     this.slot = -1;
     this.anim.play(before, steps);
+    this.resolved();
     this.hudDirty = true;
     this.afterIdle = () => {
       if (this.s.phase === 'player') {
@@ -528,6 +537,7 @@ export class BattleScreen implements Screen {
         this.app.saveResume(this.s, this.regionId);
         const first = this.s.units.find((x) => this.controllable(x) && x.x >= 0);
         if (first) this.sel = first.id;
+        this.slot = -1;
       }
     };
   }
@@ -543,12 +553,14 @@ export class BattleScreen implements Screen {
     const steps = startBattle(this.s);
     this.sel = 0;
     this.anim.play(before, steps);
+    this.resolved();
     this.hudDirty = true;
     this.afterIdle = () => {
       this.turnStart = cloneBattle(this.s);
       this.app.saveResume(this.s, this.regionId);
       const first = this.s.units.find((x) => this.controllable(x) && x.x >= 0);
       if (first) this.sel = first.id;
+      this.slot = -1;
     };
   }
 
@@ -559,6 +571,7 @@ export class BattleScreen implements Screen {
     this.sel = 0;
     this.slot = -1;
     if (steps.length) this.anim.play(before, steps);
+    this.resolved();
     if (this.s.phase !== 'player') {
       this.afterIdle = () => {
         if (this.s.phase === 'player') this.turnStart = cloneBattle(this.s);
@@ -568,6 +581,11 @@ export class BattleScreen implements Screen {
   }
 
   private afterIdle: (() => void) | null = null;
+
+  /** Logic resolves before the animation plays: record a defeat immediately so it can't be replayed. */
+  private resolved(): void {
+    if (this.s.phase === 'lost') this.app.dropResume();
+  }
 
   private onAnimIdle(): void {
     const fn = this.afterIdle;
@@ -705,7 +723,13 @@ export class BattleScreen implements Screen {
     const s = this.s;
     const q = (id: string): HTMLElement => this.root.querySelector(`#${id}`) as HTMLElement;
     const busy = this.anim.busy;
-    const threatLoss = this.threats.reduce((a, t) => a + (t.cancel ? 0 : t.outcome.gridLoss), 0);
+    // several Vek may target the same building: never count more than it has left
+    const perBuilding = new Map<number, number>();
+    for (const t of this.threats) {
+      if (t.cancel) continue;
+      for (const [i, lost] of t.outcome.buildingLoss) perBuilding.set(i, Math.min(s.tiles[i].hp, (perBuilding.get(i) ?? 0) + lost));
+    }
+    const threatLoss = Math.min(s.grid, [...perBuilding.values()].reduce((a, b) => a + b, 0));
 
     this.setHtml(q('h-grid'), `<div class="label">Power grid</div>
       <div class="row">${gridBar(s.grid, s.gridMax, s.phase === 'player' ? Math.min(threatLoss, s.grid) : 0)}<span style="font-size:22px;font-weight:700">${s.grid}</span></div>

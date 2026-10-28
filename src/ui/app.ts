@@ -226,6 +226,13 @@ export class App {
     this.pendingResume = null;
   }
 
+  /** Forget the auto-resume immediately (a lost battle must not be replayable via Continue). */
+  dropResume(): void {
+    window.clearTimeout(this.resumeTimer);
+    this.pendingResume = null;
+    clearResume();
+  }
+
   // ------------------------------------------------------------------ flow
 
   showTitle(): void {

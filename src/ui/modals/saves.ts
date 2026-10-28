@@ -1,7 +1,7 @@
 import type { App, ModalHandle } from '../app';
 import { SQUADS } from '../../game/data/squads';
 import { DIFFICULTY } from '../../game/campaign/campaign';
-import { deleteSlot, listSlots, loadSlot, storageAvailable, writeSlot, type SlotRead } from '../../game/campaign/save';
+import { deleteSlot, listSlots, loadSlot, readResume, storageAvailable, writeSlot, type SlotRead } from '../../game/campaign/save';
 import { esc, fmtDate, fmtTime, gridBar } from '../common';
 import { icon } from '../icons';
 
@@ -81,8 +81,9 @@ export function openSaves(app: App, mode: 'save' | 'load'): void {
       app.toast('That save could not be read', true);
       return;
     }
-    if (app.campaign && app.campaign.phase !== 'defeat' && app.campaign.phase !== 'victory') {
-      const ok = await app.confirm('Load campaign?', 'Your current campaign progress since your last save will be lost.', 'Load');
+    const active = app.campaign ? app.campaign.phase !== 'defeat' && app.campaign.phase !== 'victory' : !!readResume();
+    if (active) {
+      const ok = await app.confirm('Load campaign?', 'Your current run will be replaced. Progress since your last manual save will be lost.', 'Load');
       if (!ok) return;
     }
     h?.close();

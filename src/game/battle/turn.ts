@@ -152,7 +152,7 @@ function landPod(s: BattleState, ctx: Ctx): void {
   const cand: number[] = [];
   for (let i = 0; i < 64; i++) {
     const t = s.tiles[i];
-    if (!isGroundish(t) || t.spawn || t.hazard || t.fire || t.acid || unitAt(s, ix(i), iy(i))) continue;
+    if ((t.t !== 'ground' && t.t !== 'rubble' && t.t !== 'sand') || t.spawn || t.hazard || t.fire || t.acid || unitAt(s, ix(i), iy(i))) continue;
     if (iy(i) < 2 || iy(i) > 6) continue;
     cand.push(i);
   }
@@ -191,10 +191,12 @@ function planPhase(s: BattleState, ctx: Ctx): void {
     const egg = makeUnit(s, 'egg', x, y);
     ctx.rec({ e: 'spawn', id: egg.id, x, y });
   }
-  if (s.podTurn === s.turn && s.stats.pod === 'none') landPod(s, ctx);
+  // hazards are marked first so the Vek can see (and avoid) them; the pod lands after the
+  // Vek have moved so the player always gets a turn to reach it
+  markHazards(s, ctx);
   planEnemies(s, ctx);
   if (s.turn < s.maxTurns) placeSpawns(s, ctx);
-  markHazards(s, ctx);
+  if (s.podTurn === s.turn && s.stats.pod === 'none') landPod(s, ctx);
   s.version++;
 }
 
@@ -212,6 +214,11 @@ function emerge(s: BattleState, ctx: Ctx): void {
       ctx.rec({ e: 'spawnBlocked', x, y });
       if (!occ.dead) damageUnit(s, occ, 1, { bump: true, how: 'crush' }, ctx);
       if (isLost(s)) return;
+      continue;
+    }
+    if (!isGroundish(t)) {
+      // the ground under the spawn was flooded or collapsed: the Vek never surfaces
+      ctx.rec({ e: 'terrain', x, y, what: 'splash' });
       continue;
     }
     const u = makeUnit(s, def, x, y);

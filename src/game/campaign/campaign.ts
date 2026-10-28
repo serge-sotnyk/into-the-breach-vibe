@@ -378,6 +378,8 @@ export function applyBattle(c: Campaign, regionId: string, s: BattleState): Miss
   c.stats.buildingsLost += s.stats.gridLost;
   c.grid = clamp(s.grid, 0, c.gridMax);
 
+  // a rescued pilot joins after this battle's losses and experience are settled
+  let recruit = false;
   for (const o of s.objectives) {
     const ok = objectiveSucceeded(s, o);
     report.objectives.push({ label: objectiveLabel(o, spec?.boss ?? ''), success: ok, reward: o.reward });
@@ -389,7 +391,7 @@ export function applyBattle(c: Campaign, regionId: string, s: BattleState): Miss
     report.rep += o.reward.rep;
     report.power += o.reward.power;
     report.cores += o.reward.core;
-    if (o.reward.pilot && rnd(c) < 0.6) report.newPilot = grantPilot(c);
+    if (o.reward.pilot && rnd(c) < 0.6) recruit = true;
   }
 
   if (!victory) {
@@ -440,6 +442,7 @@ export function applyBattle(c: Campaign, regionId: string, s: BattleState): Miss
     }
     report.pilots.push(pr);
   }
+  if (recruit) report.newPilot = grantPilot(c);
 
   if (c.phase === 'final') {
     if (c.finalStage === 0) {

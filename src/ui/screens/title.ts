@@ -101,7 +101,13 @@ export class TitleScreen implements Screen {
     root.appendChild(node);
     bind(node, {
       continue: () => this.app.resume(),
-      new: () => this.app.showSquadSelect(),
+      new: async () => {
+        if (readResume()) {
+          const ok = await this.app.confirm('Start a new campaign?', 'This replaces your current run (the one Continue resumes). Your manual saves are kept.', 'Start new', true);
+          if (!ok) return;
+        }
+        this.app.showSquadSelect();
+      },
       load: () => openSaves(this.app, 'load'),
       help: () => openHelp(this.app),
       settings: () => openSettings(this.app),
