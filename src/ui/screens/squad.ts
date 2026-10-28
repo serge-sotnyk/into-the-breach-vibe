@@ -46,6 +46,7 @@ export class SquadScreen implements Screen {
         return `<div class="panel cyan diff-opt ${k === this.diff ? 'sel' : ''}" data-act="diff" data-id="${k}"><div class="h3">${esc(difficultyName(k))}</div><div class="dim" style="font-size:12px;margin-top:3px">${esc(difficultyDesc(k))}</div><div style="font-size:12px;margin-top:4px">${t('squad.diffStats', { grid: d.grid, max: d.gridMax, def: d.gridDef })}</div></div>`;
       })
       .join('');
+    const scroll = this.root.querySelector('.screen-body')?.scrollTop ?? 0;
     this.root.innerHTML = '';
     const node = el(`<div class="screen"><div class="bg-grid"></div>
       <div class="topbar"><button class="btn ghost small" data-act="back">${icon('undo')}${t('common.back')}</button><div class="h2">${t('squad.choose')}</div><div class="grow"></div></div>
@@ -55,6 +56,7 @@ export class SquadScreen implements Screen {
         <div style="text-align:center;margin-top:18px"><button class="btn big" data-act="start">${icon('bolt')}${t('squad.begin')}</button></div>
       </div></div>`);
     this.root.appendChild(node);
+    node.querySelector('.screen-body')?.scrollTo(0, scroll);
     node.querySelectorAll<HTMLElement>('[data-c]').forEach((slot) => {
       const [id, i] = slot.dataset.c!.split('-');
       const sq = SQUADS[id];

@@ -38,7 +38,7 @@ export class EndScreen implements Screen {
         <div class="stat"><b>${fmtTime(c.playMs)}</b><span class="label">${t('end.time')}</span></div>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">${pilots}</div>
-      <div style="display:flex;gap:12px;margin-top:10px">
+      <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:10px">
         ${!this.won ? `<button class="btn big cyan" data-act="load" ${hasSaves ? '' : 'disabled'}>${icon('load')}${t('end.load')}</button>` : ''}
         <button class="btn big" data-act="new">${icon('bolt')}${t('title.new')}</button>
         <button class="btn big ghost" data-act="title">${t('end.title')}</button>

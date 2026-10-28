@@ -90,11 +90,21 @@ To add a language, translate `uk.ts` into a new file, register it in `LANGS` in 
 | `A` | Toggle attack order numbers |
 | `F` | Skip the current animation sequence |
 
+On a touch screen:
+
+- **Tap** a mech to select it, a green tile to move, or a weapon to arm it.
+- **Tap a target** to preview the outcome, then **tap it again** to attack. In Settings you can switch to a separate Fire button instead.
+- **Long-press** any tile, unit or button for details.
+- **Tap empty ground** to cancel.
+- **Skip** speeds through the Vek turn.
+
+The interface scales up on large screens. On a tablet held upright, the panels move above and below the board.
+
 ## Code map
 
 - `src/game/battle/` — the rules engine. `effects.ts` resolves damage, pushes, terrain and status effects; `attacks.ts` turns weapons into effect lists; `ai.ts` plans Vek moves by simulating every option; `turn.ts` runs the turn structure; `preview.ts` simulates outcomes for the UI.
 - `src/game/campaign/` — islands, missions, rewards, shop, hangar, pilots, and save slots.
 - `src/render/` — the isometric canvas renderer, procedural sprites, particles and the animation player that replays recorded battle steps.
-- `src/ui/` — screens (title, squad select, world map, island map, battle HUD, shop, end screens) and modals (hangar, saves, results, settings, help).
+- `src/ui/` — screens (title, squad select, world map, island map, battle HUD, shop, end screens) and modals (hangar, saves, results, settings, help). The battle HUD footprint for each screen shape lives in CSS variables (`--hud-*` in `style.css`), and the board is fitted inside it.
 - `src/i18n/` — dictionaries, plural rules and lookups for data names; the game logic only hands out ids and message keys.
 - `src/audio/` — WebAudio synthesizer for sound effects and music.

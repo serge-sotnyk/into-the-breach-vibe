@@ -148,11 +148,11 @@ export class Renderer {
 
   layout(): void {
     const { left, right, top, bottom } = this.insets;
-    const aw = Math.max(Math.min(200, this.cw), this.cw - left - right);
-    const ah = Math.max(Math.min(200, this.ch), this.ch - top - bottom);
+    const aw = Math.max(Math.min(120, this.cw), this.cw - left - right);
+    const ah = Math.max(Math.min(120, this.ch), this.ch - top - bottom);
     const bw = 16 * HW + 40;
     const bh = 16 * HH + BASE + 92;
-    this.scale = Math.max(0.08, Math.min(1.75, Math.min(aw / bw, ah / bh)));
+    this.scale = Math.max(0.08, Math.min(2.6, Math.min(aw / bw, ah / bh)));
     this.ox = left + aw / 2;
     this.oy = top + (ah - (16 * HH + BASE) * this.scale) / 2 + 40 * this.scale;
   }

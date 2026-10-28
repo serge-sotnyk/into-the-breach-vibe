@@ -257,10 +257,13 @@ export interface Settings {
   fast: boolean;
   orderAlways: boolean;
   lang: Lang;
+  /** On touch screens, how an attack is confirmed after the preview: a second tap on the
+   *  same tile, or a separate Fire button. */
+  touchConfirm: 'tap' | 'button';
 }
 
 const SETTINGS_KEY = `${PREFIX}.settings`;
-const DEFAULT_SETTINGS: Omit<Settings, 'lang'> = { sfx: 0.7, music: 0.35, fast: false, orderAlways: true };
+const DEFAULT_SETTINGS: Omit<Settings, 'lang'> = { sfx: 0.7, music: 0.35, fast: false, orderAlways: true, touchConfirm: 'tap' };
 
 export function loadSettings(): Settings {
   const s: Settings = { ...DEFAULT_SETTINGS, lang: detectLang() };
@@ -271,6 +274,7 @@ export function loadSettings(): Settings {
     /* defaults */
   }
   if (!isLang(s.lang)) s.lang = detectLang();
+  if (s.touchConfirm !== 'button') s.touchConfirm = 'tap';
   return s;
 }
 

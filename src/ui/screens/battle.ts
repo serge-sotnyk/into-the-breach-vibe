@@ -28,6 +28,8 @@ import { emptyView, type View } from '../../render/renderer';
 import { bind } from '../dom';
 import { esc, gridBar, pips, portraitCanvas, rewardChips, spriteCanvas, tileExtras, weaponStats } from '../common';
 import { icon } from '../icons';
+import { cssPx } from '../layout';
+import { HOLD_MS, canHover, classifyTouch } from '../gestures';
 import { openHelp, openSettings } from '../modals/misc';
 import { msg, t, tn } from '../../i18n';
 import {
@@ -48,8 +50,6 @@ import {
 } from '../../i18n/names';
 
 type BannerEv = Extract<AnimEv, { e: 'banner' }>;
-
-const INSETS = { left: 205, right: 290, top: 60, bottom: 112 };
 
 export class BattleScreen implements Screen {
   inGame = true;
@@ -78,6 +78,12 @@ export class BattleScreen implements Screen {
   private lastTooltip = '';
   private listeners: [string, EventListener][] = [];
   private panelHover = 0;
+  /** The last board input came from a finger: there is no hover, so a tap previews a target
+   *  and hoverTile/hoverUnit hold the tapped tile and Vek until the next tap. */
+  private touch = !canHover();
+  /** The finger currently on the board. */
+  private finger: { id: number; x: number; y: number; t: number; held: boolean } | null = null;
+  private holdTimer = 0;
 
   constructor(private app: App, s: BattleState, private regionId: string) {
     this.s = s;
@@ -122,6 +128,8 @@ export class BattleScreen implements Screen {
       weapon: idle((b) => this.arm(Number(b.dataset.slot))),
       repair: idle(() => this.repair()),
       undo: idle(() => this.undoMove()),
+      fire: idle(() => this.confirmAim()),
+      skip: () => this.anim.skip(),
       reset: idle(() => void this.resetTurn()),
       end: idle(() => void this.endTurn()),
       deploy: idle(() => this.confirmDeploy()),
@@ -144,22 +152,28 @@ export class BattleScreen implements Screen {
       c.addEventListener(type, fn);
       this.listeners.push([type, fn]);
     };
-    on('mousemove', ((e: MouseEvent) => this.onMouseMove(e)) as EventListener);
-    on('mouseleave', (() => {
+    on('pointermove', ((e: PointerEvent) => (e.pointerType === 'touch' ? this.onFingerMove(e) : this.onMouseMove(e))) as EventListener);
+    on('pointerleave', ((e: PointerEvent) => {
+      if (e.pointerType === 'touch') return;
       this.mouse.inside = false;
       this.hoverTile = -1;
       this.hoverUnit = 0;
       this.app.hideTooltip();
     }) as EventListener);
-    on('mousedown', ((e: MouseEvent) => this.onMouseDown(e)) as EventListener);
+    on('pointerdown', ((e: PointerEvent) => (e.pointerType === 'touch' ? this.onFingerDown(e) : this.onMouseDown(e))) as EventListener);
+    on('pointerup', ((e: PointerEvent) => {
+      if (e.pointerType === 'touch') this.onFingerUp(e);
+    }) as EventListener);
+    on('pointercancel', (() => this.dropFinger()) as EventListener);
     on('contextmenu', ((e: Event) => e.preventDefault()) as EventListener);
-    this.app.renderer.setInsets(INSETS.left, INSETS.right, INSETS.top, INSETS.bottom);
+    this.applyInsets();
     this.app.renderer.fx.clear();
     this.hudDirty = true;
   }
 
   unmount(): void {
     window.clearTimeout(this.finishTimer);
+    this.dropFinger();
     for (const [t, fn] of this.listeners) this.app.canvas.removeEventListener(t, fn);
     this.listeners = [];
     this.app.canvas.style.cursor = 'default';
@@ -167,7 +181,13 @@ export class BattleScreen implements Screen {
   }
 
   resize(): void {
-    this.app.renderer.setInsets(INSETS.left, INSETS.right, INSETS.top, INSETS.bottom);
+    this.applyInsets();
+  }
+
+  /** Fits the board inside the HUD footprint, which each layout declares in CSS (--hud-*). */
+  private applyInsets(): void {
+    const k = this.app.uiScale;
+    this.app.renderer.setInsets(cssPx('--hud-l') * k, cssPx('--hud-r') * k, cssPx('--hud-t') * k, cssPx('--hud-b') * k);
   }
 
   /** Repaints the HUD in the new language without touching selection, undo or animations. */
@@ -283,6 +303,7 @@ export class BattleScreen implements Screen {
   }
 
   private onMouseMove(e: MouseEvent): void {
+    this.touch = false;
     this.mouse = { x: e.clientX, y: e.clientY, inside: true };
     const p = { tile: this.pointerTile(e.clientX, e.clientY) };
     const tileUnit = p.tile >= 0 ? liveAt(this.s, ix(p.tile), iy(p.tile)) ?? unitAt(this.s, ix(p.tile), iy(p.tile)) : undefined;
@@ -301,6 +322,7 @@ export class BattleScreen implements Screen {
   }
 
   private onMouseDown(e: MouseEvent): void {
+    this.touch = false;
     if (this.app.modalOpen) return;
     if (e.button === 2) {
       this.cancel();
@@ -311,6 +333,92 @@ export class BattleScreen implements Screen {
       return;
     }
     this.click(this.pointerTile(e.clientX, e.clientY));
+  }
+
+  // ------------------------------------------------------------------ touch
+
+  private onFingerDown(e: PointerEvent): void {
+    if (this.app.modalOpen || this.finger) return;
+    this.touch = true;
+    this.mouse.inside = false;
+    this.finger = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), held: false };
+    this.holdTimer = window.setTimeout(() => this.onHold(), HOLD_MS);
+  }
+
+  private onFingerMove(e: PointerEvent): void {
+    const f = this.finger;
+    if (!f || e.pointerId !== f.id) return;
+    if (classifyTouch(e.clientX - f.x, e.clientY - f.y, performance.now() - f.t, false) === 'drag') window.clearTimeout(this.holdTimer);
+  }
+
+  private onFingerUp(e: PointerEvent): void {
+    const f = this.finger;
+    if (!f || e.pointerId !== f.id) return;
+    this.dropFinger();
+    if (!f.held && classifyTouch(e.clientX - f.x, e.clientY - f.y, performance.now() - f.t, true) === 'tap') this.tap(this.pointerTile(f.x, f.y));
+  }
+
+  private dropFinger(): void {
+    window.clearTimeout(this.holdTimer);
+    this.finger = null;
+  }
+
+  /** A long press shows what the mouse would show on hover: the tile's details, and the
+   *  Vek's attack isolated. It stays up until the next tap. */
+  private onHold(): void {
+    const f = this.finger;
+    if (!f || this.anim.busy) return;
+    f.held = true;
+    const tile = this.pointerTile(f.x, f.y);
+    if (tile < 0) return;
+    const html = this.tooltipHtml(tile);
+    if (html) {
+      const [x, y] = this.app.renderer.tileClient(ix(tile), iy(tile), 30);
+      this.app.showTooltip(html, x, y);
+    }
+    const tu = liveAt(this.s, ix(tile), iy(tile));
+    if (tu?.team === 'enemy') this.hoverUnit = tu.id;
+    navigator.vibrate?.(12);
+    this.hudDirty = true;
+  }
+
+  private tap(tile: number): void {
+    this.app.hideTooltip();
+    if (this.anim.busy) return;
+    const s = this.s;
+    const u = this.selected();
+    const aiming = s.phase === 'player' && this.controllable(u) && this.slot >= 0 && !!u.weapons[this.slot];
+    if (aiming && tile >= 0 && targetsFor(s, u, resolveWeapon(u.weapons[this.slot], u)).includes(tile)) {
+      // the first tap on a target previews the outcome; the same tile again (or Fire) commits
+      if (this.app.settings.touchConfirm === 'tap' && this.hoverTile === tile) {
+        this.confirmAim();
+        return;
+      }
+      this.hoverTile = tile;
+      this.app.sound.play('hover');
+      this.hudDirty = true;
+      return;
+    }
+    this.clearAim();
+    this.click(tile);
+    // tapping a Vek isolates its attack until the next tap
+    const tu = tile >= 0 ? liveAt(s, ix(tile), iy(tile)) : undefined;
+    this.hoverUnit = tu?.team === 'enemy' ? tu.id : 0;
+    this.hudDirty = true;
+  }
+
+  /** Fires at the previewed target (second tap or the Fire button). */
+  private confirmAim(): void {
+    const tile = this.hoverTile;
+    this.clearAim();
+    if (tile >= 0) this.click(tile);
+  }
+
+  private clearAim(): void {
+    if (!this.touch) return;
+    this.hoverTile = -1;
+    this.hoverUnit = 0;
+    this.hudDirty = true;
   }
 
   private click(tile: number): void {
@@ -423,6 +531,7 @@ export class BattleScreen implements Screen {
 
   private select(u: Unit): void {
     if (this.sel !== u.id) this.app.sound.play('select');
+    if (this.touch) this.hoverTile = -1;
     this.sel = u.id;
     this.slot = -1;
     if (this.controllable(u) && this.s.phase === 'player' && !canMove(this.s, u) && canAct(this.s, u)) this.autoArm(u);
@@ -450,6 +559,7 @@ export class BattleScreen implements Screen {
   private arm(slot: number): void {
     const u = this.selected();
     if (this.anim.busy || !this.controllable(u) || this.s.phase !== 'player') return;
+    this.clearAim();
     const why = weaponBlock(this.s, u, slot);
     if (why) {
       this.app.toast(msg(why), true);
@@ -887,17 +997,23 @@ export class BattleScreen implements Screen {
       this.setHtml(
         hint,
         ready
-          ? t('hint.select')
-          : t('hint.allDone', { end: `<b class="amber">${t('hud.endTurn')}</b>` }),
+          ? t(this.touch ? 'hint.selectTouch' : 'hint.select')
+          : t(this.touch ? 'hint.allDoneTouch' : 'hint.allDone', { end: `<b class="amber">${t('hud.endTurn')}</b>` }),
       );
     }
 
     const canUndo = this.undo.length > 0 && s.phase === 'player' && !busy;
+    const fireBtn = this.touch && this.app.settings.touchConfirm === 'button' && !busy && !!this.view.preview;
+    const extra = busy
+      ? `<button class="btn" data-act="skip">${icon('end')}${t('hud.skip')}</button>`
+      : fireBtn
+        ? `<button class="btn big danger" data-act="fire">${icon('target')}${t('hud.fire')}</button>`
+        : '';
     const canReset = !s.resetUsed && s.phase === 'player' && !busy && !!this.turnStart;
     const allDone = s.phase === 'player' && idleUnits(s).filter((u) => canAct(s, u) && !u.acted).length === 0;
     this.setHtml(
       actions,
-      `<button class="btn ghost" data-act="undo" ${canUndo ? '' : 'disabled'}>${icon('undo')}${t('hud.undo')} <span class="key">Z</span></button>
+      `${extra}<button class="btn ghost" data-act="undo" ${canUndo ? '' : 'disabled'}>${icon('undo')}${t('hud.undo')} <span class="key">Z</span></button>
       <button class="btn ghost" data-act="reset" ${canReset ? '' : 'disabled'} title="${esc(t('hud.resetTitle'))}">${icon('reset')}${t('hud.reset')} ${s.resetUsed ? '' : '<span class="key">1×</span>'}</button>
       <button class="btn big ${allDone ? '' : 'ghost'}" data-act="end" ${s.phase === 'player' && !busy ? '' : 'disabled'} style="${allDone ? 'box-shadow:0 0 18px rgba(255,207,74,.45)' : ''}">${icon('end')}${t('hud.endTurn')}</button>`,
     );
@@ -947,11 +1063,11 @@ export class BattleScreen implements Screen {
         const w = resolveWeapon(inst, u);
         const why = msg(s.phase === 'player' ? weaponBlock(s, u, i) : 'block.notYourTurn');
         const uses = inst.uses >= 0 ? ` · ${tn('panel.usesLeft', inst.uses)}` : '';
-        return `<button class="wbtn ${this.slot === i ? 'active' : ''}" data-act="weapon" data-slot="${i}" ${why ? 'disabled' : ''} title="${esc(weaponDesc(w.id))}${why ? `\n\n${esc(t('panel.unavailable', { why }))}` : ''}">${icon(w.icon)}<span class="wn">${i + 1}. ${esc(weaponName(w.id))}</span><span class="ws">${weaponStats(w) || t('panel.utility')}${uses}${why ? ` · <span class="red">${esc(why)}</span>` : ''}</span></button>`;
+        return `<button class="wbtn ${this.slot === i ? 'active' : ''}" data-act="weapon" data-slot="${i}" ${why ? 'disabled' : ''} title="${esc(weaponDesc(w.id))}${why ? `\n\n${esc(t('panel.unavailable', { why }))}` : ''}">${icon(w.icon)}<span class="wn"><span class="key-hint">${i + 1}. </span>${esc(weaponName(w.id))}</span><span class="ws">${weaponStats(w) || t('panel.utility')}${uses}${why ? ` · <span class="red">${esc(why)}</span>` : ''}</span></button>`;
       })
       .join('');
     const rwhy = msg(s.phase === 'player' ? repairBlock(s, u) : 'block.notYourTurn');
-    const repairBtn = `<button class="wbtn" data-act="repair" ${rwhy ? 'disabled' : ''} title="${esc(t(u.skill === 'medic' ? 'panel.repairTitleMedic' : 'panel.repairTitle'))}">${icon('repair')}<span class="wn">R. ${t('panel.repair')}</span><span class="ws">${rwhy ? `<span class="red">${esc(rwhy)}</span>` : t('panel.repairStats', { n: u.skill === 'medic' ? 2 : 1 })}</span></button>`;
+    const repairBtn = `<button class="wbtn" data-act="repair" ${rwhy ? 'disabled' : ''} title="${esc(t(u.skill === 'medic' ? 'panel.repairTitleMedic' : 'panel.repairTitle'))}">${icon('repair')}<span class="wn"><span class="key-hint">R. </span>${t('panel.repair')}</span><span class="ws">${rwhy ? `<span class="red">${esc(rwhy)}</span>` : t('panel.repairStats', { n: u.skill === 'medic' ? 2 : 1 })}</span></button>`;
     return `${head}<div class="meta" style="font-size:12px">${pilotLine}</div><div class="weapons">${buttons}${repairBtn}</div>`;
   }
 }

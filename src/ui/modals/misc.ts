@@ -3,6 +3,7 @@ import { FINAL_UNLOCK, REGIONS_BEFORE_BOSS } from '../../game/campaign/campaign'
 import { SLOT_COUNT } from '../../game/campaign/save';
 import { LANGS, isLang, t, tn, type StrKey } from '../../i18n';
 import { icon } from '../icons';
+import { canHover, hasTouch } from '../gestures';
 
 export function openSettings(app: App): void {
   const s = { ...app.settings };
@@ -10,6 +11,7 @@ export function openSettings(app: App): void {
   const render = (): string => `
     <div class="h2">${t('settings.title')}</div>
     <div class="range-row"><span class="label">${t('settings.language')}</span><span class="lang-pick">${LANGS.map((l) => `<button class="btn small ${l.id === s.lang ? '' : 'ghost'}" data-act="lang" data-lang="${l.id}">${l.name}</button>`).join('')}</span></div>
+    <div class="range-row"><span class="label">${t('settings.touch')}</span><span class="lang-pick">${(['tap', 'button'] as const).map((m) => `<button class="btn small ${m === s.touchConfirm ? '' : 'ghost'}" data-act="touch" data-mode="${m}">${t(m === 'tap' ? 'settings.touchTap' : 'settings.touchButton')}</button>`).join('')}</span></div>
     <div class="range-row"><span class="label">${t('settings.sfx')}</span><input type="range" min="0" max="1" step="0.05" value="${s.sfx}" data-k="sfx"><span>${Math.round(s.sfx * 100)}%</span></div>
     <div class="range-row"><span class="label">${t('settings.music')}</span><input type="range" min="0" max="1" step="0.05" value="${s.music}" data-k="music"><span>${Math.round(s.music * 100)}%</span></div>
     <label class="check-row"><input type="checkbox" data-k="fast" ${s.fast ? 'checked' : ''}> ${t('settings.fast')}</label>
@@ -23,6 +25,11 @@ export function openSettings(app: App): void {
         if (!isLang(l) || l === s.lang) return;
         s.lang = l;
         app.setLang(l, h?.el);
+        if (h) h.el.innerHTML = render();
+      },
+      touch: (b) => {
+        s.touchConfirm = b.dataset.mode === 'button' ? 'button' : 'tap';
+        app.applySettings({ ...s });
         if (h) h.el.innerHTML = render();
       },
     },
@@ -55,6 +62,7 @@ export function openHelp(app: App): void {
     [kbd('A'), 'help.key.order'],
     [kbd('F'), 'help.key.skip'],
   ];
+  const touch: StrKey[] = ['help.touch.tap', 'help.touch.aim', 'help.touch.hold', 'help.touch.cancel', 'help.touch.skip'];
   const status: [string, StrKey][] = [
     ['flame', 'help.fire'],
     ['smoke', 'help.smoke'],
@@ -74,7 +82,7 @@ export function openHelp(app: App): void {
         <p>${icons.target} ${t('help.board.tiles')}</p>
         <p>${icons.bolt} ${t('help.board.grid')}</p>
         <p>${icons.burst} ${t('help.board.spawn')}</p>
-        <p>${icons.info} ${t('help.board.hover')}</p>
+        <p>${icons.info} ${t(canHover() ? 'help.board.hover' : 'help.board.touch')}</p>
       </div>
       <h3>${t('help.pushH')}</h3>
       <p>${t('help.push')}</p>
@@ -83,8 +91,10 @@ export function openHelp(app: App): void {
       <h3>${t('help.campaignH')}</h3>
       <p>${t('help.campaign', { regions: tn('help.regions', REGIONS_BEFORE_BOSS), islands: tn('help.islands', FINAL_UNLOCK), star: icons.star, bolt: icons.bolt, core: icons.core })}</p>
       <p>${t('help.saving', { slots: SLOT_COUNT })}</p>
-      <h3>${t('help.controlsH')}</h3>
-      <div class="cols">${controls.map(([keys, key]) => `<p>${keys} ${t(key)}</p>`).join('')}</div>
+      ${hasTouch() ? `<h3>${t('help.touchH')}</h3>
+      <div class="cols">${touch.map((key) => `<p>${t(key)}</p>`).join('')}</div>` : ''}
+      ${canHover() ? `<h3>${t('help.controlsH')}</h3>
+      <div class="cols">${controls.map(([keys, key]) => `<p>${keys} ${t(key)}</p>`).join('')}</div>` : ''}
     </div>
     <div class="actions"><button class="btn" data-act="close">${t('help.ok')}</button></div>`,
     { handlers: { close: () => h?.close() } },

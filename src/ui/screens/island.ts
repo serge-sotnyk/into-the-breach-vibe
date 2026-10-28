@@ -148,7 +148,7 @@ export class IslandScreen implements Screen {
     const objectives = m.objectives
       .map((o) => {
         const main = o.kind === 'bomb';
-        return `<div class="obj-line ${main ? 'main' : ''}" title="${esc(objectiveHint(o.kind))}"><span class="${main ? 'cyan' : 'amber'}">${icon(main ? 'bolt' : 'star')}</span><span class="grow">${esc(objectiveLabel(o, m.boss))}${main ? ` <span class="red">${t('island.required')}</span>` : ''}</span>${rewardChips(o.reward)}</div>`;
+        return `<div class="obj-line ${main ? 'main' : ''}" title="${esc(objectiveHint(o.kind))}"><span class="${main ? 'cyan' : 'amber'}">${icon(main ? 'bolt' : 'star')}</span><span class="grow">${esc(objectiveLabel(o, m.boss))}${main ? ` <span class="red">${t('island.required')}</span>` : ''}<span class="obj-hint">${esc(objectiveHint(o.kind))}</span></span>${rewardChips(o.reward)}</div>`;
       })
       .join('');
     const enemies = [...new Set([...(m.boss ? [m.boss] : []), ...m.pool])]

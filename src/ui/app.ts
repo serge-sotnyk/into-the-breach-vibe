@@ -6,6 +6,8 @@ import { clearResume, loadSettings, readResume, saveSettings, writeResume, type 
 import { bind, el, type Handlers } from './dom';
 import { esc } from './common';
 import { setLang, t, type Lang } from '../i18n';
+import { uiScaleFor } from './layout';
+import { HOLD_MS, TAP_SLOP } from './gestures';
 import { TitleScreen } from './screens/title';
 import { SquadScreen } from './screens/squad';
 import { WorldScreen } from './screens/world';
@@ -43,6 +45,8 @@ export class App {
   readonly sound = new Sound();
   readonly debug = new URLSearchParams(location.search).has('debug');
   settings: Settings = loadSettings();
+  /** Interface zoom for big screens; the HTML layers scale by it (see --ui in style.css). */
+  uiScale = 1;
   campaign: Campaign | null = null;
   screen: Screen | null = null;
   private modals: { el: HTMLElement; onClose?: () => void; dismissable: boolean }[] = [];
@@ -51,14 +55,17 @@ export class App {
 
   start(): void {
     setLang(this.settings.lang);
+    this.updateUiScale();
     this.sound.setVolumes(this.settings.sfx, this.settings.music);
     window.addEventListener('resize', () => {
+      this.updateUiScale();
       this.renderer.resize();
       this.screen?.resize?.();
     });
     window.addEventListener('keydown', (e) => this.onKey(e));
     window.addEventListener('pointerdown', () => this.sound.unlock(), { capture: true });
     window.addEventListener('keydown', () => this.sound.unlock(), { capture: true });
+    this.touchTitles();
     window.addEventListener('beforeunload', () => this.flushResume());
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') this.flushResume();
@@ -73,6 +80,62 @@ export class App {
     const params = new URLSearchParams(location.search);
     if (params.get('screen') === 'new') this.showSquadSelect();
     else this.showTitle();
+  }
+
+  /** Touch screens have no hover, so a long press shows an element's title as a tooltip
+   *  (objective hints, weapon and upgrade descriptions, reward chips…). The click that would
+   *  follow the press is swallowed, so holding a button only explains it. */
+  private touchTitles(): void {
+    let timer = 0;
+    let start: { x: number; y: number } | null = null;
+    let swallow = false;
+    let shown = false;
+    const cancel = (): void => {
+      window.clearTimeout(timer);
+      start = null;
+    };
+    document.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (e.pointerType !== 'touch') return;
+        if (shown) {
+          this.hideTooltip();
+          shown = false;
+        }
+        swallow = false;
+        const el = (e.target as HTMLElement).closest<HTMLElement>('#ui [title], #modal-root [title]');
+        if (!el?.title) return;
+        start = { x: e.clientX, y: e.clientY };
+        const { clientX: x, clientY: y } = e;
+        timer = window.setTimeout(() => {
+          this.showTooltip(esc(el.title).replace(/\n/g, '<br>'), x, y);
+          shown = true;
+          swallow = true;
+          navigator.vibrate?.(12);
+        }, HOLD_MS);
+      },
+      true,
+    );
+    document.addEventListener('pointermove', (e) => {
+      if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP) cancel();
+    });
+    document.addEventListener('pointerup', cancel);
+    document.addEventListener('pointercancel', cancel);
+    document.addEventListener(
+      'click',
+      (e) => {
+        if (!swallow) return;
+        swallow = false;
+        e.stopPropagation();
+        e.preventDefault();
+      },
+      true,
+    );
+  }
+
+  private updateUiScale(): void {
+    this.uiScale = uiScaleFor(window.innerWidth, window.innerHeight);
+    document.documentElement.style.setProperty('--ui', String(this.uiScale));
   }
 
   private loop(now: number, fromRaf: boolean): void {
@@ -123,7 +186,7 @@ export class App {
     const entry = { el: back, onClose: opts.onClose, dismissable: opts.dismissable ?? true };
     this.modals.push(entry);
     if (opts.handlers) bind(box, opts.handlers, () => this.sound.play('click'));
-    back.addEventListener('mousedown', (ev) => {
+    back.addEventListener('click', (ev) => {
       if (ev.target === back && entry.dismissable) this.closeModal(entry.el);
     });
     return { el: box, close: () => this.closeModal(back) };
@@ -180,13 +243,14 @@ export class App {
     const tt = this.tooltip;
     tt.innerHTML = html;
     tt.classList.remove('hidden');
+    // the tooltip layer is zoomed: measure on screen, then convert back to its own pixels
     const r = tt.getBoundingClientRect();
     let left = x + 18;
     let top = y + 16;
     if (left + r.width > window.innerWidth - 8) left = x - r.width - 18;
     if (top + r.height > window.innerHeight - 8) top = y - r.height - 12;
-    tt.style.left = `${Math.max(8, left)}px`;
-    tt.style.top = `${Math.max(8, top)}px`;
+    tt.style.left = `${Math.max(8, left) / this.uiScale}px`;
+    tt.style.top = `${Math.max(8, top) / this.uiScale}px`;
   }
 
   hideTooltip(): void {

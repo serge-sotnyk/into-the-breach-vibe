@@ -121,9 +121,11 @@ export class TitleScreen implements Screen {
     this.resize();
   }
 
+  /** The demo battle fills the space to the right of the menu. */
   resize(): void {
-    const w = window.innerWidth;
-    this.app.renderer.setInsets(Math.min(520, w * 0.38), 20, 40, 40);
+    const menu = this.app.ui.querySelector('.title-menu');
+    const right = menu ? menu.getBoundingClientRect().right : 0;
+    this.app.renderer.setInsets(right + 20, 20, 40, 40);
   }
 
   frame(dt: number, t: number): void {

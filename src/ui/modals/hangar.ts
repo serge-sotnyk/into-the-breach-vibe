@@ -66,7 +66,7 @@ export function openHangar(app: App, onClose?: () => void): void {
       .map((u, k) => {
         const txt = upgradeText(w.id, k);
         return `<div class="upg ${w.up[k] ? 'on' : ''}" data-act="upg" data-m="${mi}" data-s="${si}" data-u="${k}" title="${esc(txt.desc)}">
-          <span class="box"></span><span style="flex:1">${esc(txt.name)}</span><span class="cyan">${icon('core')}${u.cost}</span></div>`;
+          <span class="box"></span><span style="flex:1">${esc(txt.name)}<span class="upg-desc">${esc(txt.desc)}</span></span><span class="cyan">${icon('core')}${u.cost}</span></div>`;
       })
       .join('');
     return `<div class="slot filled">

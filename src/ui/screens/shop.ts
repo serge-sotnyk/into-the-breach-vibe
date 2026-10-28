@@ -45,6 +45,7 @@ export class ShopScreen implements Screen {
     const power = `<div class="panel shop-item"><div style="display:flex;gap:10px;align-items:center">${icon('bolt', 'big')}<div class="h3">${t('shop.power')}</div></div>
       <div style="font-size:13px;color:#c9d3df;flex:1">${t('shop.powerDesc')}<div style="margin-top:8px">${gridBar(c.grid, c.gridMax)}</div></div>
       <div style="text-align:right"><button class="btn small" data-act="power" ${canPower ? '' : 'disabled'}>${c.grid >= c.gridMax ? t('shop.gridFull') : `${icon('star')} ${POWER_PRICE}`}</button></div></div>`;
+    const scroll = this.root.querySelector('.screen-body')?.scrollTop ?? 0;
     this.root.innerHTML = '';
     const node = el(`<div class="screen"><div class="bg-grid"></div>
       <div class="topbar">
@@ -61,6 +62,7 @@ export class ShopScreen implements Screen {
         <div class="shop-grid">${power}${items}</div>
       </div></div>`);
     this.root.appendChild(node);
+    node.querySelector('.screen-body')?.scrollTo(0, scroll);
     bind(node, {
       buy: (b) => {
         if (buyItem(c, Number(b.dataset.i))) {
