@@ -1,0 +1,23 @@
+{
+  "name": "iron-grid",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "IRON GRID - a turn-based mech tactics game inspired by Into the Breach",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "balance": "vitest run -c vitest.balance.config.ts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "@fontsource/chakra-petch": "^5.3.0"
+  }
+}
