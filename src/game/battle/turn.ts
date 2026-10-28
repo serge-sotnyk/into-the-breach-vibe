@@ -1,7 +1,7 @@
 // Turn structure and player actions. Every function mutates the battle in place and
 // returns the animation steps (event + snapshot) the renderer replays.
 
-import { DIRS, DX, DY, type AnimEv, type BattleState, type Step, type Unit } from '../types';
+import { DIRS, DX, DY, type AnimEv, type BannerId, type BattleState, type Note, type Step, type Unit } from '../types';
 import { UNITS } from '../data/units';
 import { cloneBattle, idx, inb, ix, iy, pick, rnd, weighted } from '../util';
 import {
@@ -70,13 +70,17 @@ export function undeployed(s: BattleState): Unit[] {
   return s.units.filter((u) => isMech(u) && !u.dead && u.x < 0);
 }
 
+function banner(s: BattleState, ctx: Ctx, id: BannerId, tone: 'player' | 'enemy', boss = ''): void {
+  ctx.rec({ e: 'banner', id, tone, turn: s.turn, max: s.maxTurns, boss, reason: s.lostReason });
+}
+
 export function startBattle(s: BattleState): Step[] {
   const steps: Step[] = [];
   const ctx = execCtx(s, steps, 0);
   s.phase = 'enemy';
   s.turn = 1;
   const boss = s.units.find((u) => u.boss);
-  ctx.rec({ e: 'banner', text: boss ? 'HIVE LEADER SIGHTED' : 'VEK EMERGING', sub: boss ? `${UNITS[boss.def].name} · ${s.title}` : s.title, tone: 'enemy' });
+  banner(s, ctx, boss ? 'leader' : 'emerge', 'enemy', boss?.def ?? '');
   planPhase(s, ctx);
   beginPlayerTurn(s, ctx);
   return steps;
@@ -90,7 +94,7 @@ function beginPlayerTurn(s: BattleState, ctx: Ctx): void {
     u.acted = false;
   }
   s.version++;
-  ctx.rec({ e: 'banner', text: 'YOUR TURN', sub: s.turn === s.maxTurns ? 'Final turn — hold the line!' : `Turn ${s.turn} of ${s.maxTurns}`, tone: 'player' });
+  banner(s, ctx, 'yourTurn', 'player');
 }
 
 // ------------------------------------------------------------------ enemy phases
@@ -231,7 +235,7 @@ export function endPlayerTurn(s: BattleState): Step[] {
   const steps: Step[] = [];
   const env = execCtx(s, steps, 0);
   s.phase = 'enemy';
-  env.rec({ e: 'banner', text: 'ENEMY TURN', sub: s.turn === s.maxTurns ? 'Last attack before the Vek retreat' : '', tone: 'enemy' });
+  banner(s, env, 'enemyTurn', 'enemy');
 
   // 1-3. fire, the tyrant psion and the mission hazard
   environmentPhase(s, env);
@@ -269,7 +273,7 @@ export function endPlayerTurn(s: BattleState): Step[] {
 
   if (s.turn >= s.maxTurns) {
     s.phase = 'won';
-    env.rec({ e: 'banner', text: 'VICTORY', sub: 'The surviving Vek retreat underground', tone: 'player' });
+    banner(s, env, 'victory', 'player');
     return finish(s, steps, env);
   }
   s.turn++;
@@ -280,9 +284,7 @@ export function endPlayerTurn(s: BattleState): Step[] {
 
 function finish(s: BattleState, steps: Step[], env: Ctx): Step[] {
   if (isLost(s)) {
-    const why =
-      s.lostReason === 'grid' ? 'The power grid has failed' : s.lostReason === 'bomb' ? 'The Breach Bomb was destroyed' : 'All mechs destroyed';
-    env.rec({ e: 'banner', text: 'TIMELINE LOST', sub: why, tone: 'enemy' });
+    banner(s, env, 'lost', 'enemy');
   }
   s.version++;
   return steps;
@@ -308,29 +310,29 @@ export function canAct(s: BattleState, u: Unit): boolean {
 }
 
 /** Why the weapon in `slot` cannot fire right now, or '' when it can. */
-export function weaponBlock(s: BattleState, u: Unit, slot: number): string {
+export function weaponBlock(s: BattleState, u: Unit, slot: number): Note {
   const inst = u.weapons[slot];
-  if (!inst) return 'No weapon';
-  if (u.dead) return 'Destroyed';
-  if (u.frozen) return 'Frozen';
-  if (u.acted) return 'Already acted';
-  if (inSmoke(s, u)) return 'In smoke';
-  if (submerged(s, u)) return 'Submerged';
-  if (inst.uses === 0) return 'No uses left';
-  if (!targetsFor(s, u, resolveWeapon(inst, u)).length) return 'No targets';
+  if (!inst) return 'block.noWeapon';
+  if (u.dead) return 'block.destroyed';
+  if (u.frozen) return 'block.frozen';
+  if (u.acted) return 'block.acted';
+  if (inSmoke(s, u)) return 'block.smoke';
+  if (submerged(s, u)) return 'block.submerged';
+  if (inst.uses === 0) return 'block.noUses';
+  if (!targetsFor(s, u, resolveWeapon(inst, u)).length) return 'block.noTargets';
   return '';
 }
 
-export function repairBlock(s: BattleState, u: Unit): string {
-  if (u.dead) return 'Destroyed';
-  if (u.frozen) return 'Frozen';
-  if (u.acted) return 'Already acted';
-  if (inSmoke(s, u)) return 'In smoke';
+export function repairBlock(s: BattleState, u: Unit): Note {
+  if (u.dead) return 'block.destroyed';
+  if (u.frozen) return 'block.frozen';
+  if (u.acted) return 'block.acted';
+  if (inSmoke(s, u)) return 'block.smoke';
   const hurt = (x: Unit): boolean => x.hp < x.maxHp || x.fire || x.acid;
   if (hurt(u)) return '';
   // a Field Medic's repair also patches up adjacent allies
   if (u.skill === 'medic' && medicPatients(s, u).some(hurt)) return '';
-  return 'Undamaged';
+  return 'block.undamaged';
 }
 
 function medicPatients(s: BattleState, u: Unit): Unit[] {

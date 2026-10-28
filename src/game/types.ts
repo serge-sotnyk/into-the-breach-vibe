@@ -1,6 +1,8 @@
 // Core data model. Everything here is plain JSON so battles and campaigns can be
 // cloned, simulated for previews and persisted without custom serialization.
 
+import type { Key } from '../i18n';
+
 export type Dir = 0 | 1 | 2 | 3; // 0 = north (y-1), 1 = east (x+1), 2 = south (y+1), 3 = west (x-1)
 export const DIRS: readonly Dir[] = [0, 1, 2, 3];
 export const DX = [0, 1, 0, -1] as const;
@@ -155,11 +157,16 @@ export interface BattleState {
   lostReason: string;
   kind: MissionKind;
   podTurn: number;
-  title: string;
   version: number;
 }
 
 // ---------------------------------------------------------------- effects
+
+/** A message for the player: an i18n key, or '' for none. */
+export type Note = '' | Key;
+
+/** Turn and outcome banners; the UI turns them into text. */
+export type BannerId = 'emerge' | 'leader' | 'yourTurn' | 'enemyTurn' | 'victory' | 'lost';
 
 export type Vfx =
   | 'punch'
@@ -220,7 +227,7 @@ export type AnimEv =
   | { e: 'spawn'; id: number; x: number; y: number }
   | { e: 'spawnBlocked'; x: number; y: number }
   | { e: 'hazard'; x: number; y: number; kind: string }
-  | { e: 'banner'; text: string; sub: string; tone: 'player' | 'enemy' | 'neutral' }
+  | { e: 'banner'; id: BannerId; tone: 'player' | 'enemy' | 'neutral'; turn: number; max: number; boss: string; reason: string }
   | { e: 'heal'; x: number; y: number; amt: number }
   | { e: 'plan'; id: number }
   | { e: 'pod'; x: number; y: number; what: 'land' | 'collect' | 'destroy' }
@@ -260,7 +267,6 @@ export interface MechCfg {
 
 export interface MissionSpec {
   id: string;
-  name: string;
   kind: MissionKind;
   seed: number;
   theme: string;
@@ -274,12 +280,11 @@ export interface MissionSpec {
   alphaChance: number;
   psionChance: number;
   boss: string;
-  briefing: string;
 }
 
 export interface RegionState {
+  /** `<island>-<index>` or `<island>-hq`; region names and briefings are looked up from it */
   id: string;
-  name: string;
   /** position on the island map, 0..1 */
   px: number;
   py: number;

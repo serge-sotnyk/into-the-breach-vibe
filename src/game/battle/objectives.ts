@@ -1,4 +1,4 @@
-import type { BattleState, Objective } from '../types';
+import type { BattleState, Note, Objective } from '../types';
 
 export type ObjState = 'ok' | 'done' | 'fail' | 'pending';
 
@@ -7,8 +7,8 @@ function objectiveBuildingAlive(s: BattleState, tag: string): boolean {
   return !!t && t.t === 'building';
 }
 
-/** Live status of a bonus objective during battle. */
-export function objectiveState(s: BattleState, o: Objective): { state: ObjState; progress: string } {
+/** Live status of a bonus objective during battle: a numeric `progress` ("2/3") or a `note` key. */
+export function objectiveState(s: BattleState, o: Objective): { state: ObjState; progress: string; note?: Note } {
   const st = s.stats;
   switch (o.kind) {
     case 'kill':
@@ -24,7 +24,8 @@ export function objectiveState(s: BattleState, o: Objective): { state: ObjState;
     case 'pod':
       return {
         state: st.pod === 'collected' ? 'done' : st.pod === 'destroyed' ? 'fail' : 'pending',
-        progress: st.pod === 'none' ? 'lands turn 2' : st.pod === 'landed' ? 'landed' : '',
+        progress: '',
+        note: st.pod === 'none' ? 'obj.pod.incoming' : st.pod === 'landed' ? 'obj.pod.landed' : '',
       };
     case 'tank':
       return { state: st.npcLost ? 'fail' : 'ok', progress: '' };

@@ -1,25 +1,40 @@
 import type { App, ModalHandle } from '../app';
+import { FINAL_UNLOCK, REGIONS_BEFORE_BOSS } from '../../game/campaign/campaign';
+import { SLOT_COUNT } from '../../game/campaign/save';
+import { LANGS, isLang, t, tn, type StrKey } from '../../i18n';
 import { icon } from '../icons';
 
 export function openSettings(app: App): void {
   const s = { ...app.settings };
   let h: ModalHandle | null = null;
   const render = (): string => `
-    <div class="h2">Settings</div>
-    <div class="range-row"><span class="label">Sound effects</span><input type="range" min="0" max="1" step="0.05" value="${s.sfx}" data-k="sfx"><span>${Math.round(s.sfx * 100)}%</span></div>
-    <div class="range-row"><span class="label">Music</span><input type="range" min="0" max="1" step="0.05" value="${s.music}" data-k="music"><span>${Math.round(s.music * 100)}%</span></div>
-    <label class="check-row"><input type="checkbox" data-k="fast" ${s.fast ? 'checked' : ''}> Fast animations</label>
-    <label class="check-row"><input type="checkbox" data-k="orderAlways" ${s.orderAlways ? 'checked' : ''}> Always show Vek attack order numbers</label>
-    <div class="actions"><button class="btn" data-act="close">Done</button></div>`;
-  h = app.modal(render(), { handlers: { close: () => h?.close() } });
+    <div class="h2">${t('settings.title')}</div>
+    <div class="range-row"><span class="label">${t('settings.language')}</span><span class="lang-pick">${LANGS.map((l) => `<button class="btn small ${l.id === s.lang ? '' : 'ghost'}" data-act="lang" data-lang="${l.id}">${l.name}</button>`).join('')}</span></div>
+    <div class="range-row"><span class="label">${t('settings.sfx')}</span><input type="range" min="0" max="1" step="0.05" value="${s.sfx}" data-k="sfx"><span>${Math.round(s.sfx * 100)}%</span></div>
+    <div class="range-row"><span class="label">${t('settings.music')}</span><input type="range" min="0" max="1" step="0.05" value="${s.music}" data-k="music"><span>${Math.round(s.music * 100)}%</span></div>
+    <label class="check-row"><input type="checkbox" data-k="fast" ${s.fast ? 'checked' : ''}> ${t('settings.fast')}</label>
+    <label class="check-row"><input type="checkbox" data-k="orderAlways" ${s.orderAlways ? 'checked' : ''}> ${t('settings.order')}</label>
+    <div class="actions"><button class="btn" data-act="close">${t('common.done')}</button></div>`;
+  h = app.modal(render(), {
+    handlers: {
+      close: () => h?.close(),
+      lang: (b) => {
+        const l = b.dataset.lang;
+        if (!isLang(l) || l === s.lang) return;
+        s.lang = l;
+        app.setLang(l, h?.el);
+        if (h) h.el.innerHTML = render();
+      },
+    },
+  });
   h.el.addEventListener('input', (e) => {
-    const t = e.target as HTMLInputElement;
-    const k = t.dataset.k as keyof typeof s | undefined;
+    const el = e.target as HTMLInputElement;
+    const k = el.dataset.k as 'sfx' | 'music' | 'fast' | 'orderAlways' | undefined;
     if (!k) return;
-    if (t.type === 'range') {
-      (s as Record<string, number | boolean>)[k] = Number(t.value);
-      (t.nextElementSibling as HTMLElement).textContent = `${Math.round(Number(t.value) * 100)}%`;
-    } else (s as Record<string, number | boolean>)[k] = t.checked;
+    if (el.type === 'range') {
+      (s as Record<string, unknown>)[k] = Number(el.value);
+      (el.nextElementSibling as HTMLElement).textContent = `${Math.round(Number(el.value) * 100)}%`;
+    } else (s as Record<string, unknown>)[k] = el.checked;
     app.applySettings({ ...s });
     if (k === 'sfx') app.sound.play('select');
   });
@@ -27,42 +42,51 @@ export function openSettings(app: App): void {
 
 export function openHelp(app: App): void {
   let h: ModalHandle | null = null;
+  const icons = { target: icon('target'), bolt: icon('bolt'), burst: icon('burst'), info: icon('info'), star: icon('star'), core: icon('core') };
+  const kbd = (...keys: string[]): string => keys.map((k) => `<kbd>${k}</kbd>`).join(' ');
+  const controls: [string, StrKey][] = [
+    [kbd(t('help.kbd.click')), 'help.key.click'],
+    [`${kbd(t('help.kbd.rclick'))} / ${kbd('Esc')}`, 'help.key.cancel'],
+    [kbd('1', '2'), 'help.key.weapons'],
+    [kbd('R'), 'help.key.repair'],
+    [kbd('Tab'), 'help.key.next'],
+    [kbd('Z'), 'help.key.undo'],
+    [kbd(t('help.kbd.space')), 'help.key.end'],
+    [kbd('A'), 'help.key.order'],
+    [kbd('F'), 'help.key.skip'],
+  ];
+  const status: [string, StrKey][] = [
+    ['flame', 'help.fire'],
+    ['smoke', 'help.smoke'],
+    ['drop', 'help.acid'],
+    ['snow', 'help.frozen'],
+    ['shield', 'help.shield'],
+    ['web', 'help.web'],
+  ];
   h = app.modal(
     `<div class="help">
-      <div class="h2">How to Play</div>
-      <p>The Vek are surfacing across the islands. Command three mechs to protect the civilian <b class="amber">power grid</b>. If grid power drops to zero — or all three mechs are destroyed — the timeline is lost.</p>
-      <h3>The turn</h3>
-      <p>Each round the Vek move first and <b class="red">telegraph</b> exactly what they will attack (red tiles, arrows and damage numbers). Then you act: every mech may <b>move</b> once and then <b>use one weapon</b> (or repair). When you end your turn, the Vek attacks resolve in the numbered order shown. Survive the listed number of turns to win the battle.</p>
-      <h3>Reading the board</h3>
+      <div class="h2">${t('common.howToPlay')}</div>
+      <p>${t('help.intro')}</p>
+      <h3>${t('help.turnH')}</h3>
+      <p>${t('help.turn')}</p>
+      <h3>${t('help.boardH')}</h3>
       <div class="cols">
-        <p>${icon('target')} <b>Red striped tiles</b> will be hit. Numbers show damage, white arrows show pushes.</p>
-        <p>${icon('bolt')} A <b class="amber">!</b> warning over a building means the grid is about to lose power.</p>
-        <p>${icon('burst')} <b>Glowing cracks</b> mark where new Vek emerge. Stand on them to block the spawn (1 damage).</p>
-        <p>${icon('info')} Hover any tile or unit for details. Hover an enemy to isolate its attack.</p>
+        <p>${icons.target} ${t('help.board.tiles')}</p>
+        <p>${icons.bolt} ${t('help.board.grid')}</p>
+        <p>${icons.burst} ${t('help.board.spawn')}</p>
+        <p>${icons.info} ${t('help.board.hover')}</p>
       </div>
-      <h3>Pushing is everything</h3>
-      <p>Vek attacks are aimed relative to the Vek. <b>Push a Vek and its attack moves with it</b> — turn a building strike into empty air or into another Vek. Units pushed into an obstacle or another unit take <b>1 bump damage</b> (as does the obstacle — careful near buildings!). Ground Vek pushed into <b>water</b> drown; anything pushed into a <b>chasm</b> falls.</p>
-      <h3>Status effects</h3>
-      <div class="cols">
-        <p>${icon('flame')} <b>Fire</b>: 1 damage at the start of every enemy turn. Repair or water removes it.</p>
-        <p>${icon('smoke')} <b>Smoke</b>: units inside cannot attack or repair. Smoke a Vek to cancel its attack.</p>
-        <p>${icon('drop')} <b>A.C.I.D.</b>: doubles weapon damage taken (ignores armor).</p>
-        <p>${icon('snow')} <b>Frozen</b>: cannot act, but the ice absorbs the next hit.</p>
-        <p>${icon('shield')} <b>Shield</b>: blocks the next instance of damage or negative effect.</p>
-        <p>${icon('web')} <b>Webbed</b>: cannot move until the webbing Vek dies or is pushed away.</p>
-      </div>
-      <h3>Campaign</h3>
-      <p>Pick an island, defend three regions, then hold the headquarters against the island's Hive leader to secure it — destroying the leader is a bonus objective. Bonus objectives earn <b class="amber">reputation</b> ${icon('star')} (spent in the shop after each island), <b class="amber">grid power</b> ${icon('bolt')} and <b class="cyan">reactor cores</b> ${icon('core')} (power weapons and upgrades in the Hangar). Pilots gain experience and level up — but die with their mech. Secure two islands to unlock the final assault on the Hive Caldera.</p>
-      <p><b>Saving:</b> manual saves (6 slots) are available on the world map between islands and persist after defeat. Your current run also auto-saves so you can <b>Continue</b> after closing the browser.</p>
-      <h3>Controls</h3>
-      <div class="cols">
-        <p><kbd>Click</kbd> select / move / fire &nbsp; <kbd>Right-click</kbd> / <kbd>Esc</kbd> cancel</p>
-        <p><kbd>1</kbd> <kbd>2</kbd> weapons &nbsp; <kbd>R</kbd> repair &nbsp; <kbd>Tab</kbd> next mech</p>
-        <p><kbd>Z</kbd> undo move &nbsp; <kbd>Space</kbd> end turn</p>
-        <p><kbd>A</kbd> toggle attack order &nbsp; <kbd>F</kbd> skip animations</p>
-      </div>
+      <h3>${t('help.pushH')}</h3>
+      <p>${t('help.push')}</p>
+      <h3>${t('help.statusH')}</h3>
+      <div class="cols">${status.map(([ic, key]) => `<p>${icon(ic)} ${t(key)}</p>`).join('')}</div>
+      <h3>${t('help.campaignH')}</h3>
+      <p>${t('help.campaign', { regions: tn('help.regions', REGIONS_BEFORE_BOSS), islands: tn('help.islands', FINAL_UNLOCK), star: icons.star, bolt: icons.bolt, core: icons.core })}</p>
+      <p>${t('help.saving', { slots: SLOT_COUNT })}</p>
+      <h3>${t('help.controlsH')}</h3>
+      <div class="cols">${controls.map(([keys, key]) => `<p>${keys} ${t(key)}</p>`).join('')}</div>
     </div>
-    <div class="actions"><button class="btn" data-act="close">Got it</button></div>`,
+    <div class="actions"><button class="btn" data-act="close">${t('help.ok')}</button></div>`,
     { handlers: { close: () => h?.close() } },
   );
 }

@@ -1,7 +1,8 @@
 // Persistent storage. Manual saves live in independent localStorage keys so a
 // defeat (which only clears the auto-resume slot) never touches them.
 
-import type { BattleState, Campaign, Difficulty } from '../types';
+import type { BattleState, Campaign, Difficulty, Note } from '../types';
+import { detectLang, isLang, type Lang } from '../../i18n';
 import { SQUADS } from '../data/squads';
 import { CAMPAIGN_VERSION } from './campaign';
 
@@ -28,7 +29,7 @@ export interface SlotData {
   campaign: Campaign;
 }
 
-export type SlotRead = { status: 'empty' } | { status: 'ok'; data: SlotData } | { status: 'corrupt'; reason: string };
+export type SlotRead = { status: 'empty' } | { status: 'ok'; data: SlotData } | { status: 'corrupt'; reason: Note };
 
 export interface ResumeData {
   campaign: Campaign;
@@ -168,12 +169,12 @@ export function readSlot(i: number): SlotRead {
   try {
     raw = st.getItem(slotKey(i));
   } catch {
-    return { status: 'corrupt', reason: 'Storage unavailable' };
+    return { status: 'corrupt', reason: 'saves.err.unavailable' };
   }
   if (!raw) return { status: 'empty' };
   try {
     const data = JSON.parse(raw) as SlotData;
-    if (!isObj(data) || !validCampaign(data.campaign)) return { status: 'corrupt', reason: 'Unrecognised save data' };
+    if (!isObj(data) || !validCampaign(data.campaign)) return { status: 'corrupt', reason: 'saves.err.unrecognised' };
     // the campaign is what matters; damaged slot metadata is rebuilt from it
     if (!validMeta(data.meta)) {
       const old: Record<string, unknown> = isObj(data.meta) ? data.meta : {};
@@ -181,7 +182,7 @@ export function readSlot(i: number): SlotRead {
     }
     return { status: 'ok', data };
   } catch {
-    return { status: 'corrupt', reason: 'Save data is damaged' };
+    return { status: 'corrupt', reason: 'saves.err.damaged' };
   }
 }
 
@@ -189,15 +190,15 @@ export function listSlots(): SlotRead[] {
   return Array.from({ length: SLOT_COUNT }, (_, i) => readSlot(i));
 }
 
-export function writeSlot(i: number, c: Campaign, label: string): string {
+export function writeSlot(i: number, c: Campaign, label: string): Note {
   const st = storage();
-  if (!st) return 'Browser storage is unavailable (private mode?)';
+  if (!st) return 'saves.err.private';
   const data: SlotData = { meta: metaFor(c, label), campaign: c };
   try {
     st.setItem(slotKey(i), JSON.stringify(data));
     return '';
   } catch (e) {
-    return e instanceof Error && /quota/i.test(e.name + e.message) ? 'Storage is full' : 'Could not write save';
+    return e instanceof Error && /quota/i.test(e.name + e.message) ? 'saves.err.full' : 'saves.err.write';
   }
 }
 
@@ -255,19 +256,22 @@ export interface Settings {
   music: number;
   fast: boolean;
   orderAlways: boolean;
+  lang: Lang;
 }
 
 const SETTINGS_KEY = `${PREFIX}.settings`;
-const DEFAULT_SETTINGS: Settings = { sfx: 0.7, music: 0.35, fast: false, orderAlways: true };
+const DEFAULT_SETTINGS: Omit<Settings, 'lang'> = { sfx: 0.7, music: 0.35, fast: false, orderAlways: true };
 
 export function loadSettings(): Settings {
+  const s: Settings = { ...DEFAULT_SETTINGS, lang: detectLang() };
   try {
     const raw = storage()?.getItem(SETTINGS_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (raw) Object.assign(s, JSON.parse(raw) as Partial<Settings>);
   } catch {
     /* defaults */
   }
-  return { ...DEFAULT_SETTINGS };
+  if (!isLang(s.lang)) s.lang = detectLang();
+  return s;
 }
 
 export function saveSettings(s: Settings): void {

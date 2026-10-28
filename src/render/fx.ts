@@ -105,7 +105,7 @@ export class FX {
       const a = Math.min(1, f.life / (f.max * 0.4));
       const y = f.y - 26 - k * 26;
       ctx.globalAlpha = a;
-      ctx.font = `700 ${f.size}px "Chakra Petch", system-ui, sans-serif`;
+      ctx.font = `700 ${f.size}px "Chakra Petch", Tektur, system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.lineWidth = 4;
       ctx.strokeStyle = 'rgba(5,8,12,0.9)';

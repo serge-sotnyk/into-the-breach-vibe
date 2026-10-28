@@ -1,9 +1,7 @@
 import type { App, Screen } from '../app';
-import type { BattleState, Unit } from '../../game/types';
+import type { AnimEv, BattleState, Unit } from '../../game/types';
 import { UNITS } from '../../game/data/units';
 import { SQUADS } from '../../game/data/squads';
-import { SKILLS } from '../../game/data/pilots';
-import { HAZARDS, objectiveHint, objectiveLabel } from '../../game/data/islands';
 import { cloneBattle, idx, ix, iy } from '../../game/util';
 import { inSmoke, isMech, liveAt, reachable, submerged, unitAt, unitById } from '../../game/battle/board';
 import { resolveWeapon, targetsFor } from '../../game/battle/attacks';
@@ -28,9 +26,28 @@ import { isArmored } from '../../game/battle/effects';
 import { Animator } from '../../render/anim';
 import { emptyView, type View } from '../../render/renderer';
 import { bind } from '../dom';
-import { TERRAIN_INFO, esc, gridBar, pips, portraitCanvas, rewardChips, spriteCanvas, tileExtras, weaponStats } from '../common';
+import { esc, gridBar, pips, portraitCanvas, rewardChips, spriteCanvas, tileExtras, weaponStats } from '../common';
 import { icon } from '../icons';
 import { openHelp, openSettings } from '../modals/misc';
+import { msg, t, tn } from '../../i18n';
+import {
+  className,
+  hazardDesc,
+  hazardName,
+  missionTitle,
+  objectiveHint,
+  objectiveLabel,
+  pilotName,
+  skillName,
+  terrainDesc,
+  terrainName,
+  unitDesc,
+  unitName,
+  weaponDesc,
+  weaponName,
+} from '../../i18n/names';
+
+type BannerEv = Extract<AnimEv, { e: 'banner' }>;
 
 const INSETS = { left: 205, right: 290, top: 60, bottom: 112 };
 
@@ -67,7 +84,7 @@ export class BattleScreen implements Screen {
     this.view = emptyView(SQUADS[app.campaign!.squad].palette);
     this.anim = new Animator(app.renderer, {
       sound: (n) => app.sound.play(n),
-      banner: (t, sub, tone) => app.banner(t, sub, tone),
+      banner: (ev) => app.banner(...this.bannerText(ev), ev.tone),
     });
     this.anim.onIdle = () => this.onAnimIdle();
     this.showOrder = app.settings.orderAlways;
@@ -82,7 +99,7 @@ export class BattleScreen implements Screen {
     root.innerHTML = `<div class="hud">
       <div class="panel hud-grid" id="h-grid"></div>
       <div class="panel hud-turn" id="h-turn"></div>
-      <div class="hud-menu"><button class="btn ghost small" data-act="menu" title="Menu (Esc)">${icon('gear')}</button></div>
+      <div class="hud-menu"><button class="btn ghost small" data-act="menu" title="${esc(t('hud.menu'))}">${icon('gear')}</button></div>
       <div class="panel hud-obj" id="h-obj"></div>
       <div class="hud-roster" id="h-roster"></div>
       <div class="panel hud-unit hidden" id="h-unit"></div>
@@ -151,6 +168,14 @@ export class BattleScreen implements Screen {
 
   resize(): void {
     this.app.renderer.setInsets(INSETS.left, INSETS.right, INSETS.top, INSETS.bottom);
+  }
+
+  /** Repaints the HUD in the new language without touching selection, undo or animations. */
+  relocalize(): void {
+    this.hudCache.clear();
+    this.hudDirty = true;
+    this.lastTooltip = '';
+    this.root.querySelector('[data-act="menu"]')?.setAttribute('title', t('hud.menu'));
   }
 
   // ------------------------------------------------------------------ frame
@@ -427,7 +452,7 @@ export class BattleScreen implements Screen {
     if (this.anim.busy || !this.controllable(u) || this.s.phase !== 'player') return;
     const why = weaponBlock(this.s, u, slot);
     if (why) {
-      this.app.toast(why, true);
+      this.app.toast(msg(why), true);
       this.app.sound.play('denied');
       return;
     }
@@ -470,7 +495,7 @@ export class BattleScreen implements Screen {
     if (this.anim.busy || !this.controllable(u) || this.s.phase !== 'player') return;
     const why = repairBlock(this.s, u);
     if (why) {
-      this.app.toast(why, true);
+      this.app.toast(msg(why), true);
       this.app.sound.play('denied');
       return;
     }
@@ -510,7 +535,7 @@ export class BattleScreen implements Screen {
 
   private async resetTurn(): Promise<void> {
     if (this.anim.busy || this.s.phase !== 'player' || !this.turnStart || this.s.resetUsed) return;
-    const ok = await this.app.confirm('Reset turn?', 'Rewind every action taken this turn. You can only do this once per battle.', 'Reset turn');
+    const ok = await this.app.confirm(t('battle.resetQ'), t('battle.resetBody'), t('hud.reset'));
     if (!ok) return;
     const v = this.s.version;
     this.s = cloneBattle(this.turnStart);
@@ -528,7 +553,7 @@ export class BattleScreen implements Screen {
     if (this.anim.busy || this.s.phase !== 'player') return;
     const idle = idleUnits(this.s).filter((u) => canAct(this.s, u) && !u.acted);
     if (idle.length && !this.autoplay) {
-      const ok = await this.app.confirm('End turn?', `${idle.length} unit${idle.length > 1 ? 's' : ''} can still act. End your turn anyway?`, 'End turn');
+      const ok = await this.app.confirm(t('battle.endQ'), tn('battle.endBody', idle.length), t('hud.endTurn'));
       if (!ok) return;
     }
     const before = cloneBattle(this.s);
@@ -553,7 +578,7 @@ export class BattleScreen implements Screen {
   private confirmDeploy(): void {
     if (this.s.phase !== 'deploy' || this.anim.busy) return;
     if (undeployed(this.s).length) {
-      this.app.toast('Place every mech in the green zone first', true);
+      this.app.toast(t('battle.placeAll'), true);
       this.app.sound.play('denied');
       return;
     }
@@ -612,15 +637,37 @@ export class BattleScreen implements Screen {
     }
   }
 
+  /** The mission name, in the current language. */
+  private title(): string {
+    return missionTitle(this.s.kind, this.regionId);
+  }
+
+  private bannerText(ev: BannerEv): [string, string] {
+    switch (ev.id) {
+      case 'leader':
+        return [t('banner.leader'), `${unitName(ev.boss)} · ${this.title()}`];
+      case 'emerge':
+        return [t('banner.emerge'), this.title()];
+      case 'yourTurn':
+        return [t('banner.yourTurn'), ev.turn === ev.max ? t('banner.finalTurn') : t('battle.turnOf', { turn: ev.turn, max: ev.max })];
+      case 'enemyTurn':
+        return [t('banner.enemyTurn'), ev.turn === ev.max ? t('banner.lastAttack') : ''];
+      case 'victory':
+        return [t('banner.victory'), t('banner.victorySub')];
+      case 'lost':
+        return [t('banner.lost'), t(ev.reason === 'grid' ? 'banner.lostGrid' : ev.reason === 'bomb' ? 'banner.lostBomb' : 'banner.lostMechs')];
+    }
+  }
+
   private openMenu(): void {
     const h = this.app.modal(
-      `<div class="h2">Paused</div>
-       <p class="dim" style="max-width:420px">${esc(this.s.title)} · Turn ${Math.max(1, this.s.turn)} of ${this.s.maxTurns}</p>
+      `<div class="h2">${t('menu.paused')}</div>
+       <p class="dim" style="max-width:420px">${esc(this.title())} · ${t('battle.turnOf', { turn: Math.max(1, this.s.turn), max: this.s.maxTurns })}</p>
        <div style="display:flex;flex-direction:column;gap:10px;min-width:320px;margin-top:10px">
-         <button class="btn" data-act="resume">Resume</button>
-         <button class="btn ghost" data-act="help">${icon('info')}How to play</button>
-         <button class="btn ghost" data-act="settings">${icon('gear')}Settings</button>
-         <button class="btn danger" data-act="quit">Retreat to title</button>
+         <button class="btn" data-act="resume">${t('menu.resume')}</button>
+         <button class="btn ghost" data-act="help">${icon('info')}${t('common.howToPlay')}</button>
+         <button class="btn ghost" data-act="settings">${icon('gear')}${t('common.settings')}</button>
+         <button class="btn danger" data-act="quit">${t('menu.retreat')}</button>
        </div>`,
       {
         handlers: {
@@ -628,7 +675,7 @@ export class BattleScreen implements Screen {
           help: () => openHelp(this.app),
           settings: () => openSettings(this.app),
           quit: async () => {
-            const ok = await this.app.confirm('Retreat to title?', 'The battle is auto-saved at the start of your current turn. Choose Continue on the title screen to resume it.', 'Retreat', true);
+            const ok = await this.app.confirm(t('menu.retreatQ'), t('menu.retreatBody'), t('menu.retreatOk'), true);
             if (ok) this.app.abandonToTitle();
           },
         },
@@ -657,46 +704,46 @@ export class BattleScreen implements Screen {
     const s = this.s;
     const x = ix(tile);
     const y = iy(tile);
-    const t = s.tiles[tile];
+    const tl = s.tiles[tile];
     const parts: string[] = [];
     const u = liveAt(s, x, y) ?? unitAt(s, x, y);
     if (u) {
       const d = UNITS[u.def];
-      parts.push(`<div class="tt-title">${esc(d.name)}${u.dead ? ' (wreck)' : ''}</div>`);
+      parts.push(`<div class="tt-title">${esc(unitName(u.def))}${u.dead ? ` <span class="dim">${t('tip.wreck')}</span>` : ''}</div>`);
       if (!u.dead) {
-        parts.push(`<div>${pips(u.hp, u.maxHp, u.team === 'enemy')} <span class="dim">${u.hp}/${u.maxHp} HP · Move ${u.move}</span></div>`);
+        parts.push(`<div>${pips(u.hp, u.maxHp, u.team === 'enemy')} <span class="dim">${t('tip.hpMove', { hp: u.hp, max: u.maxHp, move: u.move })}</span></div>`);
         const traits: string[] = [];
-        if (u.flying) traits.push('Flying');
-        if (isArmored(s, u)) traits.push('Armored');
-        if (u.massive && u.team === 'enemy') traits.push('Massive (won’t drown)');
-        if (u.stable) traits.push('Cannot be pushed');
+        if (u.flying) traits.push(t('common.flying'));
+        if (isArmored(s, u)) traits.push(t('common.armored'));
+        if (u.massive && u.team === 'enemy') traits.push(t('tip.massive'));
+        if (u.stable) traits.push(t('tip.stable'));
         if (traits.length) parts.push(`<div class="tt-row">${traits.join(' · ')}</div>`);
-        if (u.fire) parts.push('<div class="tt-row tt-warn">Burning: takes 1 damage at the start of the enemy turn.</div>');
-        if (u.acid) parts.push('<div class="tt-row green">A.C.I.D.: takes double weapon damage.</div>');
-        if (u.frozen) parts.push('<div class="tt-row cyan">Frozen: cannot act; the next hit only breaks the ice.</div>');
-        if (u.shield) parts.push('<div class="tt-row cyan">Shielded: blocks the next damage or effect.</div>');
-        if (u.webbedBy) parts.push('<div class="tt-row">Webbed: cannot move.</div>');
-        if (submerged(s, u)) parts.push('<div class="tt-row cyan">Submerged: cannot use weapons.</div>');
-        if (inSmoke(s, u)) parts.push('<div class="tt-row">In smoke: cannot attack or repair.</div>');
+        if (u.fire) parts.push(`<div class="tt-row tt-warn">${t('tip.burning')}</div>`);
+        if (u.acid) parts.push(`<div class="tt-row green">${t('tip.acid')}</div>`);
+        if (u.frozen) parts.push(`<div class="tt-row cyan">${t('tip.frozen')}</div>`);
+        if (u.shield) parts.push(`<div class="tt-row cyan">${t('tip.shielded')}</div>`);
+        if (u.webbedBy) parts.push(`<div class="tt-row">${t('tip.webbed')}</div>`);
+        if (submerged(s, u)) parts.push(`<div class="tt-row cyan">${t('tip.submerged')}</div>`);
+        if (inSmoke(s, u)) parts.push(`<div class="tt-row">${t('tip.smoke')}</div>`);
         if (u.team === 'enemy' && u.plan) {
           const th = this.threats.find((h) => h.id === u.id);
-          parts.push(`<div class="tt-row"><b>Attack #${u.plan.order}</b>: ${esc(resolveWeapon(u.plan.w, u).name)}${th?.cancel ? ' <span class="cyan">(cancelled)</span>' : ''}</div>`);
-        } else if (u.team === 'enemy' && UNITS[u.def].psion) parts.push(`<div class="tt-row">${esc(d.desc)}</div>`);
-        else if (u.team === 'enemy' && UNITS[u.def].egg) parts.push(`<div class="tt-row">${esc(d.desc)}</div>`);
+          parts.push(`<div class="tt-row"><b>${t('tip.attackN', { n: u.plan.order })}</b>: ${esc(weaponName(u.plan.w))}${th?.cancel ? ` <span class="cyan">${t('tip.cancelled')}</span>` : ''}</div>`);
+        } else if (u.team === 'enemy' && (d.psion || d.egg)) parts.push(`<div class="tt-row">${esc(unitDesc(u.def))}</div>`);
       }
     }
-    const [tname, tdesc] = TERRAIN_INFO[t.t] ?? ['Ground', ''];
-    if (t.t === 'building') parts.push(`<div class="tt-title" style="margin-top:${u ? 8 : 0}px">${t.obj === 'relay' ? 'Power Relay' : t.obj === 'lab' ? 'Research Lab' : t.obj === 'uplink' ? 'Seismic Uplink' : tname} <span class="dim">${t.hp}/${t.maxHp}</span></div><div class="tt-row">${tdesc}</div>`);
-    else if (!u || t.t !== 'ground') parts.push(`<div class="${u ? 'tt-row' : 'tt-title'}">${tname}${t.t === 'mountain' ? ` <span class="dim">${t.hp}/2</span>` : t.t === 'ice' ? ` <span class="dim">${t.hp > 1 ? 'intact' : 'cracked'}</span>` : ''}</div>${tdesc && t.t !== 'ground' ? `<div class="tt-row dim">${tdesc}</div>` : ''}`);
-    for (const ex of tileExtras(t)) parts.push(`<div class="tt-row">${ex}</div>`);
-    if (t.hazard && s.hazard) parts.push(`<div class="tt-row tt-warn"><b>${esc(HAZARDS[s.hazard].name)}:</b> ${esc(HAZARDS[s.hazard].desc)}</div>`);
+    const tname = esc(terrainName(tl.t));
+    const tdesc = esc(terrainDesc(tl.t));
+    if (tl.t === 'building') parts.push(`<div class="tt-title" style="margin-top:${u ? 8 : 0}px">${tl.obj === 'relay' || tl.obj === 'lab' || tl.obj === 'uplink' ? t(`building.${tl.obj}`) : tname} <span class="dim">${tl.hp}/${tl.maxHp}</span></div><div class="tt-row">${tdesc}</div>`);
+    else if (!u || tl.t !== 'ground') parts.push(`<div class="${u ? 'tt-row' : 'tt-title'}">${tname}${tl.t === 'mountain' ? ` <span class="dim">${tl.hp}/2</span>` : tl.t === 'ice' ? ` <span class="dim">${tl.hp > 1 ? t('tip.iceIntact') : t('tip.iceCracked')}</span>` : ''}</div>${tl.t !== 'ground' ? `<div class="tt-row dim">${tdesc}</div>` : ''}`);
+    for (const ex of tileExtras(tl)) parts.push(`<div class="tt-row">${ex}</div>`);
+    if (tl.hazard && s.hazard) parts.push(`<div class="tt-row tt-warn"><b>${esc(hazardName(s.hazard))}:</b> ${esc(hazardDesc(s.hazard))}</div>`);
     for (const th of this.threats) {
       if (th.cancel || !th.outcome.tiles.has(tile)) continue;
       const e = unitById(s, th.id);
       if (!e) continue;
       const lost = th.outcome.buildingLoss.get(tile);
       const dmg = th.outcome.effects.find((ef) => ef.k === 'dmg' && ef.x === x && ef.y === y && ef.amt > 0);
-      parts.push(`<div class="tt-row tt-warn">Targeted by <b>${esc(UNITS[e.def].name)}</b> (#${th.order})${dmg && dmg.k === 'dmg' ? ` — ${dmg.amt} damage` : ''}${lost ? ` · <b>-${lost} grid power</b>` : ''}</div>`);
+      parts.push(`<div class="tt-row tt-warn">${t('tip.targeted', { name: `<b>${esc(unitName(e.def))}</b>`, n: th.order })}${dmg && dmg.k === 'dmg' ? ` — ${tn('tip.damage', dmg.amt)}` : ''}${lost ? ` · <b>${tn('tip.gridLoss', lost)}</b>` : ''}</div>`);
     }
     return parts.join('');
   }
@@ -743,31 +790,33 @@ export class BattleScreen implements Screen {
     }
     const threatLoss = Math.min(s.grid, [...perBuilding.values()].reduce((a, b) => a + b, 0));
 
-    this.setHtml(q('h-grid'), `<div class="label">Power grid</div>
+    this.setHtml(q('h-grid'), `<div class="label">${t('hud.grid')}</div>
       <div class="row">${gridBar(s.grid, s.gridMax, s.phase === 'player' ? Math.min(threatLoss, s.grid) : 0)}<span style="font-size:22px;font-weight:700">${s.grid}</span></div>
-      <div class="row dim" style="font-size:12px">Grid defense ${s.gridDef}%${threatLoss && s.phase === 'player' ? ` · <span class="red">${threatLoss} power under threat</span>` : ''}</div>`);
+      <div class="row dim" style="font-size:12px">${t('hud.gridDefense', { n: s.gridDef })}${threatLoss && s.phase === 'player' ? ` · <span class="red">${tn('hud.underThreat', threatLoss)}</span>` : ''}</div>`);
 
     const enemies = s.units.filter((u) => u.team === 'enemy' && u.plan).length;
     const spawns = s.tiles.filter((t) => t.spawn).length;
     let phase = '';
-    if (s.phase === 'deploy') phase = '<span class="amber">Deployment</span>';
-    else if (s.phase === 'player') phase = `<span class="amber">Your turn</span> · ${enemies} attack${enemies === 1 ? '' : 's'} queued${spawns ? ` · ${spawns} emerging` : ''}`;
-    else if (s.phase === 'enemy') phase = '<span class="red">Vek turn</span>';
-    else if (s.phase === 'won') phase = '<span class="green">Victory</span>';
-    else phase = '<span class="red">Defeat</span>';
-    this.setHtml(q('h-turn'), `<div class="big">${s.phase === 'deploy' ? esc(s.title.toUpperCase()) : `TURN ${Math.max(1, s.turn)} / ${s.maxTurns}`}</div><div class="phase">${phase}</div>`);
+    if (s.phase === 'deploy') phase = `<span class="amber">${t('hud.deployment')}</span>`;
+    else if (s.phase === 'player') phase = `<span class="amber">${t('hud.yourTurn')}</span> · ${tn('hud.attacksQueued', enemies)}${spawns ? ` · ${tn('hud.emerging', spawns)}` : ''}`;
+    else if (s.phase === 'enemy') phase = `<span class="red">${t('hud.vekTurn')}</span>`;
+    else if (s.phase === 'won') phase = `<span class="green">${t('hud.victory')}</span>`;
+    else phase = `<span class="red">${t('hud.defeat')}</span>`;
+    this.setHtml(q('h-turn'), `<div class="big">${s.phase === 'deploy' ? esc(this.title().toUpperCase()) : t('hud.turn', { turn: Math.max(1, s.turn), max: s.maxTurns })}</div><div class="phase">${phase}</div>`);
 
     const objs = s.objectives
       .map((o) => {
         const st = objectiveState(s, o);
         const ico = st.state === 'done' ? `<span class="green">${icon('check')}</span>` : st.state === 'fail' ? `<span class="red">${icon('cross')}</span>` : st.state === 'ok' ? `<span class="green">${icon('shield')}</span>` : `<span class="amber">${icon('star')}</span>`;
         const cls = st.state === 'done' || st.state === 'ok' ? 'ok' : st.state === 'fail' ? 'fail' : '';
-        return `<div class="obj-line ${cls} ${o.kind === 'bomb' ? 'main' : ''}" title="${esc(objectiveHint(o.kind))}">${ico}<span class="grow">${esc(objectiveLabel(o, s.units.find((u) => u.boss)?.def ?? ''))}${st.progress ? ` <span class="dim">(${st.progress})</span>` : ''}</span>${rewardChips(o.reward)}</div>`;
+        const progress = st.note ? msg(st.note, 0, { turn: s.podTurn }) : st.progress;
+        return `<div class="obj-line ${cls} ${o.kind === 'bomb' ? 'main' : ''}" title="${esc(objectiveHint(o.kind, s.podTurn))}">${ico}<span class="grow">${esc(objectiveLabel(o, s.units.find((u) => u.boss)?.def ?? ''))}${progress ? ` <span class="dim">(${esc(progress)})</span>` : ''}</span>${rewardChips(o.reward)}</div>`;
       })
       .join('');
-    const hz = s.hazard ? `<div class="obj-line" style="border-left-color:var(--violet)" title="${esc(HAZARDS[s.hazard].desc)}"><span style="color:var(--violet)">${icon('info')}</span><span class="grow">${esc(HAZARDS[s.hazard].name)}</span></div>` : '';
-    this.setHtml(q('h-obj'), `<div class="label">Objectives</div>
-      <div class="obj-line main"><span class="cyan">${icon('hourglass')}</span><span class="grow">Survive ${s.maxTurns} turns</span><span class="dim">${Math.max(0, s.maxTurns - Math.max(0, s.turn - (s.phase === 'player' || s.phase === 'deploy' ? 1 : 0)))} left</span></div>
+    const hz = s.hazard ? `<div class="obj-line" style="border-left-color:var(--violet)" title="${esc(hazardDesc(s.hazard))}"><span style="color:var(--violet)">${icon('info')}</span><span class="grow">${esc(hazardName(s.hazard))}</span></div>` : '';
+    const turnsLeft = Math.max(0, s.maxTurns - Math.max(0, s.turn - (s.phase === 'player' || s.phase === 'deploy' ? 1 : 0)));
+    this.setHtml(q('h-obj'), `<div class="label">${t('hud.objectives')}</div>
+      <div class="obj-line main"><span class="cyan">${icon('hourglass')}</span><span class="grow">${tn('hud.survive', s.maxTurns)}</span><span class="dim">${tn('hud.left', turnsLeft)}</span></div>
       ${objs}${hz}`);
 
     // roster (portraits are inserted only when the markup changes)
@@ -778,20 +827,20 @@ export class BattleScreen implements Screen {
         const d = UNITS[u.def];
         const pilot = u.slot >= 0 ? this.app.campaign!.mechs[u.slot]?.pilot : null;
         let st = '';
-        if (u.dead) st = '<span class="red">DESTROYED</span>';
-        else if (s.phase === 'deploy') st = u.x >= 0 ? '<span class="green">DEPLOYED</span>' : '<span class="amber">AWAITING DEPLOY</span>';
-        else if (u.frozen) st = '<span class="cyan">FROZEN</span>';
-        else if (u.acted && !canMove(s, u)) st = '<span class="dim">DONE</span>';
-        else if (u.moved) st = '<span class="amber">MOVED</span>';
-        else if (u.webbedBy) st = '<span class="dim">WEBBED</span>';
-        else st = '<span class="green">READY</span>';
-        const title = pilot ? `${pilot.name}${pilot.ai ? ' (Autopilot)' : ` — ${SKILLS[pilot.skill]?.name ?? ''}`}` : '';
+        if (u.dead) st = `<span class="red">${t('roster.destroyed')}</span>`;
+        else if (s.phase === 'deploy') st = u.x >= 0 ? `<span class="green">${t('roster.deployed')}</span>` : `<span class="amber">${t('roster.awaiting')}</span>`;
+        else if (u.frozen) st = `<span class="cyan">${t('roster.frozen')}</span>`;
+        else if (u.acted && !canMove(s, u)) st = `<span class="dim">${t('roster.done')}</span>`;
+        else if (u.moved) st = `<span class="amber">${t('roster.moved')}</span>`;
+        else if (u.webbedBy) st = `<span class="dim">${t('roster.webbed')}</span>`;
+        else st = `<span class="green">${t('roster.ready')}</span>`;
+        const title = pilot ? (pilot.ai ? pilotName(pilot) : `${pilot.name} — ${skillName(pilot.skill)}`) : '';
         return `<div class="panel roster-card ${u.id === this.sel ? 'sel' : ''} ${u.dead ? 'dead' : ''}" data-act="select" data-id="${u.id}" data-hover-unit="${u.id}" title="${esc(title)}">
-          <div class="pc" data-u="${u.id}"></div><div class="nm">${esc(d.name)}</div>
+          <div class="pc" data-u="${u.id}"></div><div class="nm">${esc(unitName(d.id))}</div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">${pips(Math.max(0, u.hp), u.maxHp)}<span class="st">${st}</span></div></div>`;
       })
       .join('');
-    const orderRow = `<div style="display:flex;gap:6px"><button class="btn small ghost" data-act="order" title="Toggle attack order numbers (A)">${icon('target')}Order ${this.showOrder ? 'on' : 'off'}</button>${this.app.debug ? `<button class="btn small ghost" data-act="auto">Auto ${this.autoplay ? 'on' : 'off'}</button>` : ''}</div>`;
+    const orderRow = `<div style="display:flex;gap:6px"><button class="btn small ghost" data-act="order" title="${esc(t('hud.orderTitle'))}">${icon('target')}${t(this.showOrder ? 'hud.orderOn' : 'hud.orderOff')}</button>${this.app.debug ? `<button class="btn small ghost" data-act="auto">Auto ${this.autoplay ? 'on' : 'off'}</button>` : ''}</div>`;
     if (this.setHtml(roster, cards + orderRow)) {
       roster.querySelectorAll<HTMLElement>('.pc').forEach((slot) => {
         const u = unitById(s, Number(slot.dataset.u));
@@ -814,9 +863,9 @@ export class BattleScreen implements Screen {
       const cur = this.selected();
       this.setHtml(
         dp,
-        `<div class="h3">Deploy your squad</div>
-        <div class="dim" style="font-size:13px;margin:6px 0 10px">Click a green tile to place ${cur ? `<b class="amber">${esc(UNITS[cur.def].name)}</b>` : 'a mech'}. Click a placed mech to reposition it.${s.hazard ? ` <br><span style="color:var(--violet)">${esc(HAZARDS[s.hazard].name)}</span>: ${esc(HAZARDS[s.hazard].desc)}` : ''}</div>
-        <button class="btn big" data-act="deploy" ${left ? 'disabled' : ''}>${left ? `${left} mech${left > 1 ? 's' : ''} to place` : `${icon('bolt')}Confirm deployment`}</button>`,
+        `<div class="h3">${t('deploy.title')}</div>
+        <div class="dim" style="font-size:13px;margin:6px 0 10px">${cur ? `${t('deploy.placing', { mech: `<b class="amber">${esc(unitName(cur.def))}</b>` })}<br>` : ''}${t('deploy.help')}${s.hazard ? ` <br><span style="color:var(--violet)">${esc(hazardName(s.hazard))}</span>: ${esc(hazardDesc(s.hazard))}` : ''}</div>
+        <button class="btn big" data-act="deploy" ${left ? 'disabled' : ''}>${left ? tn('deploy.left', left) : `${icon('bolt')}${t('deploy.confirm')}`}</button>`,
       );
       this.setHtml(actions, '');
       return;
@@ -838,8 +887,8 @@ export class BattleScreen implements Screen {
       this.setHtml(
         hint,
         ready
-          ? `Select a mech — click it or press <b class="amber">Tab</b>. <span class="red">Red striped tiles</span> show where the Vek strike when you end your turn: push them, block them or kill them first.`
-          : `Every unit has acted. Press <b class="amber">End turn</b> (Space) to let the Vek attack.`,
+          ? t('hint.select')
+          : t('hint.allDone', { end: `<b class="amber">${t('hud.endTurn')}</b>` }),
       );
     }
 
@@ -848,9 +897,9 @@ export class BattleScreen implements Screen {
     const allDone = s.phase === 'player' && idleUnits(s).filter((u) => canAct(s, u) && !u.acted).length === 0;
     this.setHtml(
       actions,
-      `<button class="btn ghost" data-act="undo" ${canUndo ? '' : 'disabled'}>${icon('undo')}Undo move <span class="key">Z</span></button>
-      <button class="btn ghost" data-act="reset" ${canReset ? '' : 'disabled'} title="Rewind this turn (once per battle)">${icon('reset')}Reset turn ${s.resetUsed ? '' : '<span class="key">1×</span>'}</button>
-      <button class="btn big ${allDone ? '' : 'ghost'}" data-act="end" ${s.phase === 'player' && !busy ? '' : 'disabled'} style="${allDone ? 'box-shadow:0 0 18px rgba(255,207,74,.45)' : ''}">${icon('end')}End turn</button>`,
+      `<button class="btn ghost" data-act="undo" ${canUndo ? '' : 'disabled'}>${icon('undo')}${t('hud.undo')} <span class="key">Z</span></button>
+      <button class="btn ghost" data-act="reset" ${canReset ? '' : 'disabled'} title="${esc(t('hud.resetTitle'))}">${icon('reset')}${t('hud.reset')} ${s.resetUsed ? '' : '<span class="key">1×</span>'}</button>
+      <button class="btn big ${allDone ? '' : 'ghost'}" data-act="end" ${s.phase === 'player' && !busy ? '' : 'disabled'} style="${allDone ? 'box-shadow:0 0 18px rgba(255,207,74,.45)' : ''}">${icon('end')}${t('hud.endTurn')}</button>`,
     );
   }
 
@@ -869,40 +918,40 @@ export class BattleScreen implements Screen {
     const s = this.s;
     const d = UNITS[u.def];
     const statuses: string[] = [];
-    if (u.fire) statuses.push(`<span class="chip" style="color:#ff8a2a">${icon('flame')}Burning</span>`);
-    if (u.acid) statuses.push(`<span class="chip green">${icon('drop')}A.C.I.D.</span>`);
-    if (u.frozen) statuses.push(`<span class="chip cyan">${icon('snow')}Frozen</span>`);
-    if (u.shield) statuses.push(`<span class="chip cyan">${icon('shield')}Shield</span>`);
-    if (u.webbedBy) statuses.push(`<span class="chip">${icon('web')}Webbed</span>`);
-    if (isArmored(s, u)) statuses.push(`<span class="chip">${icon('armor')}Armored</span>`);
-    if (u.flying) statuses.push('<span class="chip">Flying</span>');
-    if (inSmoke(s, u)) statuses.push(`<span class="chip">${icon('smoke')}In smoke</span>`);
-    if (submerged(s, u)) statuses.push('<span class="chip cyan">Submerged</span>');
-    const head = `<div class="ucv"></div><div class="uname">${esc(d.name)} ${d.cls ? `<span class="chip">${d.cls}</span>` : ''}${u.alpha ? '<span class="chip red">Alpha</span>' : ''}${u.boss ? '<span class="chip red">Leader</span>' : ''}</div>
-      <div class="meta">${pips(Math.max(0, u.hp), u.maxHp, u.team === 'enemy')}<span>${u.hp}/${u.maxHp} HP</span><span>${icon('move')} ${u.move}</span>${statuses.join('')}</div>`;
+    if (u.fire) statuses.push(`<span class="chip" style="color:#ff8a2a">${icon('flame')}${t('status.burning')}</span>`);
+    if (u.acid) statuses.push(`<span class="chip green">${icon('drop')}${t('status.acid')}</span>`);
+    if (u.frozen) statuses.push(`<span class="chip cyan">${icon('snow')}${t('common.frozen')}</span>`);
+    if (u.shield) statuses.push(`<span class="chip cyan">${icon('shield')}${t('status.shield')}</span>`);
+    if (u.webbedBy) statuses.push(`<span class="chip">${icon('web')}${t('status.webbed')}</span>`);
+    if (isArmored(s, u)) statuses.push(`<span class="chip">${icon('armor')}${t('common.armored')}</span>`);
+    if (u.flying) statuses.push(`<span class="chip">${t('common.flying')}</span>`);
+    if (inSmoke(s, u)) statuses.push(`<span class="chip">${icon('smoke')}${t('common.inSmoke')}</span>`);
+    if (submerged(s, u)) statuses.push(`<span class="chip cyan">${t('common.submerged')}</span>`);
+    const head = `<div class="ucv"></div><div class="uname">${esc(unitName(u.def))} ${d.cls ? `<span class="chip">${esc(className(d.cls))}</span>` : ''}${u.alpha ? `<span class="chip red">${t('common.alpha')}</span>` : ''}${u.boss ? `<span class="chip red">${t('common.leader')}</span>` : ''}</div>
+      <div class="meta">${pips(Math.max(0, u.hp), u.maxHp, u.team === 'enemy')}<span>${t('panel.hp', { hp: u.hp, max: u.maxHp })}</span><span>${icon('move')} ${u.move}</span>${statuses.join('')}</div>`;
     if (u.team === 'enemy') {
       const w = d.weapon ? resolveWeapon(d.weapon, u) : null;
       const th = this.threats.find((t) => t.id === u.id);
       let attack = '';
       if (w && w.kind !== 'none') {
-        attack = `<b class="red">${esc(w.name)}</b>${w.dmg ? ` <span class="dim">(${w.dmg} dmg)</span>` : ''} — ${esc(w.desc)}`;
-        if (u.plan) attack += ` <span class="chip red">Attack #${u.plan.order}</span>${th?.cancel ? ' <span class="chip cyan">Cancelled</span>' : ''}`;
+        attack = `<b class="red">${esc(weaponName(w.id))}</b>${w.dmg ? ` <span class="dim">(${t('panel.dmg', { n: w.dmg })})</span>` : ''} — ${esc(weaponDesc(w.id))}`;
+        if (u.plan) attack += ` <span class="chip red">${t('tip.attackN', { n: u.plan.order })}</span>${th?.cancel ? ` <span class="chip cyan">${t('panel.cancelled')}</span>` : ''}`;
       }
-      return `${head}<div class="enemy-desc">${esc(d.desc)}${attack ? `<br>${attack}` : ''}${u.plan ? '<br><span class="dim">Pushing this Vek moves its attack with it.</span>' : ''}</div>`;
+      return `${head}<div class="enemy-desc">${esc(unitDesc(u.def))}${attack ? `<br>${attack}` : ''}${u.plan ? `<br><span class="dim">${t('panel.pushHint')}</span>` : ''}</div>`;
     }
-    if (u.team !== 'player') return `${head}<div class="enemy-desc">${esc(d.desc)}</div>`;
+    if (u.team !== 'player') return `${head}<div class="enemy-desc">${esc(unitDesc(u.def))}</div>`;
     const pilot = u.slot >= 0 ? this.app.campaign!.mechs[u.slot]?.pilot : null;
-    const pilotLine = pilot ? `<span class="dim">Pilot</span> <b>${esc(pilot.name)}</b>${pilot.ai ? '' : ` · <span class="amber">${esc(SKILLS[pilot.skill]?.name ?? '')}</span>`}` : '';
+    const pilotLine = pilot ? `<span class="dim">${t('common.pilot')}</span> <b>${esc(pilotName(pilot))}</b>${pilot.ai ? '' : ` · <span class="amber">${esc(skillName(pilot.skill))}</span>`}` : '';
     const buttons = u.weapons
       .map((inst, i) => {
         const w = resolveWeapon(inst, u);
-        const why = s.phase === 'player' ? weaponBlock(s, u, i) : 'Not your turn';
-        const uses = inst.uses >= 0 ? ` · ${inst.uses} left` : '';
-        return `<button class="wbtn ${this.slot === i ? 'active' : ''}" data-act="weapon" data-slot="${i}" ${why ? 'disabled' : ''} title="${esc(w.desc)}${why ? `\n\nUnavailable: ${why}` : ''}">${icon(w.icon)}<span class="wn">${i + 1}. ${esc(w.name)}</span><span class="ws">${weaponStats(w) || 'utility'}${uses}${why ? ` · <span class="red">${why}</span>` : ''}</span></button>`;
+        const why = msg(s.phase === 'player' ? weaponBlock(s, u, i) : 'block.notYourTurn');
+        const uses = inst.uses >= 0 ? ` · ${tn('panel.usesLeft', inst.uses)}` : '';
+        return `<button class="wbtn ${this.slot === i ? 'active' : ''}" data-act="weapon" data-slot="${i}" ${why ? 'disabled' : ''} title="${esc(weaponDesc(w.id))}${why ? `\n\n${esc(t('panel.unavailable', { why }))}` : ''}">${icon(w.icon)}<span class="wn">${i + 1}. ${esc(weaponName(w.id))}</span><span class="ws">${weaponStats(w) || t('panel.utility')}${uses}${why ? ` · <span class="red">${esc(why)}</span>` : ''}</span></button>`;
       })
       .join('');
-    const rwhy = s.phase === 'player' ? repairBlock(s, u) : 'Not your turn';
-    const repairBtn = `<button class="wbtn" data-act="repair" ${rwhy ? 'disabled' : ''} title="Repair 1 HP${u.skill === 'medic' ? ' (Field Medic: 2 HP + adjacent allies)' : ''} and remove fire and A.C.I.D. Uses this unit's action.">${icon('repair')}<span class="wn">R. Repair</span><span class="ws">${rwhy ? `<span class="red">${rwhy}</span>` : `+${u.skill === 'medic' ? 2 : 1} HP · cleanse`}</span></button>`;
+    const rwhy = msg(s.phase === 'player' ? repairBlock(s, u) : 'block.notYourTurn');
+    const repairBtn = `<button class="wbtn" data-act="repair" ${rwhy ? 'disabled' : ''} title="${esc(t(u.skill === 'medic' ? 'panel.repairTitleMedic' : 'panel.repairTitle'))}">${icon('repair')}<span class="wn">R. ${t('panel.repair')}</span><span class="ws">${rwhy ? `<span class="red">${esc(rwhy)}</span>` : t('panel.repairStats', { n: u.skill === 'medic' ? 2 : 1 })}</span></button>`;
     return `${head}<div class="meta" style="font-size:12px">${pilotLine}</div><div class="weapons">${buttons}${repairBtn}</div>`;
   }
 }

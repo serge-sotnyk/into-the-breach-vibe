@@ -2,14 +2,14 @@
 // sequence of snapshots with tweens, particles and sound cues.
 
 import type { AnimEv, BattleState, Step, Unit } from '../game/types';
-import { UNITS } from '../game/data/units';
+import { t, tn } from '../i18n';
 import { unitById, isMech } from '../game/battle/board';
 import { tileCenter } from './iso';
 import type { Overlay, Renderer } from './renderer';
 
 export interface AnimHooks {
   sound(name: string): void;
-  banner(text: string, sub: string, tone: 'player' | 'enemy' | 'neutral'): void;
+  banner(ev: Extract<AnimEv, { e: 'banner' }>): void;
 }
 
 function emptyOverlay(): Overlay {
@@ -242,7 +242,7 @@ export class Animator {
       }
       case 'block': {
         const [x, y] = this.at(ev.x, ev.y, 26);
-        const label = { shield: 'SHIELDED', ice: 'ICE BROKEN', armor: 'ARMOR', grid: 'GRID RESISTED' }[ev.kind];
+        const label = t(`fx.block.${ev.kind}`);
         fx.text(x, y - 6, label, ev.kind === 'grid' ? '#ffe066' : '#9fe6ff', 15);
         if (ev.kind === 'ice') fx.frost(x, y + 10);
         else fx.ring(x, y + 18, '#6fd3ff', 30);
@@ -256,22 +256,22 @@ export class Animator {
         const mech = !!u && isMech(u);
         if (ev.how === 'drown') {
           fx.splash(x, y + 10);
-          fx.text(x, y - 20, 'DROWNED', '#8fdcff', 15);
+          fx.text(x, y - 20, t('fx.drowned'), '#8fdcff', 15);
           S('splash');
         } else if (ev.how === 'fall') {
           fx.dust(x, y + 10, '#3a2f2a');
-          fx.text(x, y - 20, 'FELL', '#d8c7b8', 15);
+          fx.text(x, y - 20, t('fx.fell'), '#d8c7b8', 15);
           S('fall');
         } else if (ev.how === 'burn' && !mech) {
           fx.embers(x, y, 14);
-          fx.text(x, y - 20, 'INCINERATED', '#ffb347', 15);
+          fx.text(x, y - 20, t('fx.incinerated'), '#ffb347', 15);
           S('fire');
         } else {
           fx.explosion(x, y, mech ? 1.4 : 0.9);
           if (!mech) fx.debris(x, y, u ? '#7a4a2a' : '#555', 8);
         }
         if (mech) {
-          fx.text(x, y - 34, 'MECH DESTROYED', '#ff5a4a', 16, 1.6);
+          fx.text(x, y - 34, t('fx.mechDestroyed'), '#ff5a4a', 16, 1.6);
           S('mechdown');
         } else if (ev.how !== 'drown' && ev.how !== 'fall') S('die');
         break;
@@ -281,7 +281,7 @@ export class Animator {
         fx.explosion(x, y, 0.8);
         fx.debris(x, y - 10, '#9a8f80', 14);
         for (let i = 0; i < 4; i++) fx.smoke(x + (Math.random() - 0.5) * 30, y, 10, '#4a4a4a');
-        fx.text(x, y - 40, `-${ev.lost} GRID POWER`, '#ff5a4a', 17, 1.6);
+        fx.text(x, y - 40, tn('fx.gridPower', ev.lost), '#ff5a4a', 17, 1.6);
         fx.shake = Math.max(fx.shake, 8);
         S('building');
         break;
@@ -325,18 +325,18 @@ export class Animator {
           case 'fire':
           case 'burn':
             fx.embers(x, y + 14, 8);
-            if (ev.what === 'fire') fx.text(x, y - 16, 'ON FIRE', '#ffb347', 14);
+            if (ev.what === 'fire') fx.text(x, y - 16, t('fx.onFire'), '#ffb347', 14);
             S('fire');
             break;
           case 'acid':
           case 'acidpool':
-            fx.text(x, y - 16, ev.what === 'acid' ? 'A.C.I.D.' : '', '#9dff5a', 14);
+            fx.text(x, y - 16, ev.what === 'acid' ? t('status.acid') : '', '#9dff5a', 14);
             S('acid');
             break;
           case 'freeze':
           case 'iceblock':
             fx.frost(x, y + 10);
-            fx.text(x, y - 16, 'FROZEN', '#bff0ff', 14);
+            fx.text(x, y - 16, t('fx.frozen'), '#bff0ff', 14);
             S('freeze');
             break;
           case 'smoke':
@@ -348,7 +348,7 @@ export class Animator {
             S('shield');
             break;
           case 'web':
-            fx.text(x, y - 16, 'WEBBED', '#f0f0f0', 14);
+            fx.text(x, y - 16, t('fx.webbed'), '#f0f0f0', 14);
             S('web');
             break;
         }
@@ -372,7 +372,7 @@ export class Animator {
       case 'spawnBlocked': {
         const [x, y] = this.at(ev.x, ev.y, 10);
         fx.dust(x, y + 10, '#6a5040', 10);
-        fx.text(x, y - 30, 'SPAWN BLOCKED', '#7dffa8', 15);
+        fx.text(x, y - 30, t('fx.spawnBlocked'), '#7dffa8', 15);
         fx.shake = Math.max(fx.shake, 4);
         S('bump');
         break;
@@ -417,8 +417,8 @@ export class Animator {
         break;
       }
       case 'banner':
-        this.hooks.banner(ev.text, ev.sub, ev.tone);
-        S(ev.tone === 'enemy' ? (ev.text === 'TIMELINE LOST' ? 'lose' : 'enemyturn') : ev.text === 'VICTORY' ? 'win' : 'yourturn');
+        this.hooks.banner(ev);
+        S(ev.id === 'lost' ? 'lose' : ev.id === 'victory' ? 'win' : ev.tone === 'enemy' ? 'enemyturn' : 'yourturn');
         break;
       case 'heal': {
         const [x, y] = this.at(ev.x, ev.y, 20);
@@ -433,12 +433,12 @@ export class Animator {
       case 'pod': {
         const [x, y] = this.at(ev.x, ev.y, 10);
         if (ev.what === 'collect') {
-          fx.text(x, y - 30, 'POD RECOVERED', '#9ff3ff', 16, 1.5);
+          fx.text(x, y - 30, t('fx.podRecovered'), '#9ff3ff', 16, 1.5);
           fx.ring(x, y + 10, '#9ff3ff', 40);
           S('pod');
         } else if (ev.what === 'destroy') {
           fx.debris(x, y, '#e9eef2', 10);
-          fx.text(x, y - 30, 'POD DESTROYED', '#ff5a4a', 16, 1.5);
+          fx.text(x, y - 30, t('fx.podDestroyed'), '#ff5a4a', 16, 1.5);
           S('die');
         } else S('whoosh');
         break;
@@ -452,7 +452,7 @@ export class Animator {
           fx.ring(x, y + 20, '#d06cff', 36);
           S('zap');
         } else if (ev.what.startsWith('cancel')) {
-          const label = { 'cancel-smoke': 'SMOKED OUT', 'cancel-frozen': 'FROZEN', 'cancel-water': 'SUBMERGED', 'cancel-edge': 'NO TARGET' }[ev.what] ?? 'CANCELLED';
+          const label = t(({ 'cancel-smoke': 'fx.smokedOut', 'cancel-frozen': 'fx.frozen', 'cancel-water': 'fx.submerged', 'cancel-edge': 'fx.noTarget' } as const)[ev.what as 'cancel-smoke'] ?? 'fx.cancelled');
           fx.text(x, y - 6, label, '#cfe3f2', 15);
           S('denied');
         } else if (ev.what === 'spawnMark') {
@@ -465,7 +465,7 @@ export class Animator {
         const u = this.base ? unitById(this.base, ev.id) : undefined;
         if (u) {
           const [x, y] = this.at(u.x, u.y, 40);
-          fx.text(x, y, 'ATTACK REVERSED', '#ffe066', 15);
+          fx.text(x, y, t('fx.reversed'), '#ffe066', 15);
         }
         S('shield');
         break;
@@ -498,6 +498,3 @@ export class Animator {
   }
 }
 
-export function unitDisplayName(u: Unit): string {
-  return UNITS[u.def]?.name ?? u.def;
-}

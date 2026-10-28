@@ -13,7 +13,7 @@
   --green: #5ef08a;
   --violet: #c792ff;
   --cut: 10px;
-  font-family: 'Chakra Petch', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'Chakra Petch', Tektur, system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--text);
   background: var(--bg);
 }
@@ -465,7 +465,7 @@ button {
 }
 
 .banner .t {
-  font-size: 40px;
+  font-size: clamp(26px, 4vw, 40px);
   font-weight: 700;
   letter-spacing: 0.25em;
   color: var(--amber);
@@ -544,6 +544,18 @@ button {
 .title-menu .btn {
   justify-content: flex-start;
   width: 100%;
+}
+
+.title-menu .lang-switch {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.title-menu .lang-switch .btn {
+  width: auto;
+  min-width: 64px;
+  justify-content: center;
 }
 
 .title-menu .cont-sub {
@@ -1097,6 +1109,17 @@ button {
   width: 200px;
 }
 
+/* longer Ukrainian labels: tighter spacing so they fit the 200px column */
+:lang(uk) .hud-actions .btn {
+  letter-spacing: 0.05em;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+:lang(uk) .hud-actions .btn.big {
+  font-size: 16px;
+}
+
 .hud-menu {
   right: 326px;
   top: 14px;
@@ -1296,6 +1319,12 @@ input.text {
   width: 100%;
 }
 
+.lang-pick {
+  grid-column: 2 / 4;
+  display: flex;
+  gap: 6px;
+}
+
 .range-row {
   display: grid;
   grid-template-columns: 160px 1fr 50px;
@@ -1366,9 +1395,11 @@ input.text {
 }
 
 .end-screen .big-title {
-  font-size: 64px;
+  font-size: clamp(34px, 6vw, 64px);
   font-weight: 700;
   letter-spacing: 0.16em;
+  line-height: 1.1;
+  text-align: center;
 }
 
 .stats-row {

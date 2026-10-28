@@ -15,6 +15,8 @@ import { icon } from '../icons';
 import { openSaves } from '../modals/saves';
 import { openHelp, openSettings } from '../modals/misc';
 import { cloneBattle } from '../../game/util';
+import { LANGS, getLang, isLang, t, tn } from '../../i18n';
+import { missionTitle } from '../../i18n/names';
 
 const THEMES = ['verdant', 'dune', 'glacier', 'cinder'];
 const POOLS: Record<string, string[]> = {
@@ -45,7 +47,6 @@ export class TitleScreen implements Screen {
     this.squad = Object.keys(SQUADS)[Math.floor(Math.random() * 3)];
     const spec: MissionSpec = {
       id: 'demo',
-      name: 'Demo',
       kind: 'standard',
       seed: (Math.random() * 2 ** 31) >>> 0,
       theme,
@@ -59,7 +60,6 @@ export class TitleScreen implements Screen {
       alphaChance: 0.25,
       psionChance: 0,
       boss: '',
-      briefing: '',
     };
     const sq = SQUADS[this.squad];
     this.s = createBattle(spec, {
@@ -80,30 +80,33 @@ export class TitleScreen implements Screen {
     let contSub = '';
     if (resume) {
       const c = resume.campaign;
-      contSub = resume.battle
-        ? resume.battle.phase === 'deploy'
-          ? `deploying · ${resume.battle.title}`
-          : `${resume.battle.title} · turn ${resume.battle.turn}`
-        : `${c.secured} island${c.secured === 1 ? '' : 's'} secured`;
+      const b = resume.battle;
+      const name = b ? missionTitle(b.kind, resume.regionId) : '';
+      contSub = b
+        ? b.phase === 'deploy'
+          ? t('title.contDeploy', { name })
+          : t('title.contTurn', { name, turn: b.turn })
+        : tn('common.islandsSecured', c.secured);
     }
     const node = el(`<div class="title-screen">
       <div class="title-menu">
         <div class="logo">IRON<span>GRID</span></div>
-        <div class="tag">Mech tactics · Hold the line</div>
-        ${resume ? `<button class="btn big" data-act="continue">${icon('end')}Continue<span class="cont-sub">${esc(contSub)}</span></button>` : ''}
-        <button class="btn big ${resume ? 'ghost' : ''}" data-act="new">${icon('bolt')}New Campaign</button>
-        <button class="btn big ghost" data-act="load">${icon('load')}Load Game</button>
-        <button class="btn big ghost" data-act="help">${icon('info')}How to Play</button>
-        <button class="btn big ghost" data-act="settings">${icon('gear')}Settings</button>
+        <div class="tag">${t('title.tagline')}</div>
+        ${resume ? `<button class="btn big" data-act="continue">${icon('end')}${t('common.continue')}<span class="cont-sub">${esc(contSub)}</span></button>` : ''}
+        <button class="btn big ${resume ? 'ghost' : ''}" data-act="new">${icon('bolt')}${t('title.new')}</button>
+        <button class="btn big ghost" data-act="load">${icon('load')}${t('title.load')}</button>
+        <button class="btn big ghost" data-act="help">${icon('info')}${t('common.howToPlay')}</button>
+        <button class="btn big ghost" data-act="settings">${icon('gear')}${t('common.settings')}</button>
+        <div class="lang-switch" title="${esc(t('settings.language'))}">${LANGS.map((l) => `<button class="btn small ${l.id === getLang() ? '' : 'ghost'}" data-act="lang" data-lang="${l.id}">${l.short}</button>`).join('')}</div>
       </div>
-      <div class="title-foot">A turn-based tribute to <i>Into the Breach</i>. All art and sound are generated in code.</div>
+      <div class="title-foot">${t('title.foot')}</div>
     </div>`);
     root.appendChild(node);
     bind(node, {
       continue: () => this.app.resume(),
       new: async () => {
         if (readResume()) {
-          const ok = await this.app.confirm('Start a new campaign?', 'This replaces your current run (the one Continue resumes). Your manual saves are kept.', 'Start new', true);
+          const ok = await this.app.confirm(t('title.newQ'), t('title.newBody'), t('title.newOk'), true);
           if (!ok) return;
         }
         this.app.showSquadSelect();
@@ -111,6 +114,9 @@ export class TitleScreen implements Screen {
       load: () => openSaves(this.app, 'load'),
       help: () => openHelp(this.app),
       settings: () => openSettings(this.app),
+      lang: (b) => {
+        if (isLang(b.dataset.lang)) this.app.setLang(b.dataset.lang);
+      },
     }, () => this.app.sound.play('click'));
     this.resize();
   }

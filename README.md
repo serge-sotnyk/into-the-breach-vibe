@@ -1,8 +1,10 @@
 # IRON GRID
 
+**English** | [Українська](README.uk.md)
+
 A turn-based mech tactics game for the browser, built as a tribute to *Into the Breach*. Command three mechs on compact 8×8 islands, read the Vek's telegraphed attacks, and use positioning, pushes and the terrain to keep the civilian power grid alive across an island campaign that ends in a two-part final battle.
 
-All art (isometric dioramas, mechs, Vek, effects) and all sound (effects and ambient music) are generated in code. No external assets.
+All art (isometric dioramas, mechs, Vek, effects) and all sound (effects and ambient music) are generated in code. No external assets. The game is available in English and Ukrainian.
 
 ## How it started
 
@@ -25,7 +27,7 @@ Other scripts:
 
 | Script | What it does |
 | --- | --- |
-| `npm test` | Engine, campaign and save/load tests, including full headless campaigns |
+| `npm test` | Engine, campaign, save/load and translation tests, including full headless campaigns |
 | `npm run typecheck` | TypeScript check |
 | `npm run build` | Production build into `dist/` |
 | `npm run balance` | Opt-in balance report: the auto-pilot plays dozens of battles per squad and tier |
@@ -58,6 +60,18 @@ Four islands (Verdant Reach, Dune Sprawl, Glacier Spire, Cinder Works) with thei
 - **Persistence:** saves live in `localStorage` (`irongrid.v1.slot.N`), so they survive browser restarts. Losing a campaign never touches manual saves.
 - **Continue:** the current run also auto-saves (between missions and at the start of every turn in battle) to a separate key, so **Continue** on the title screen resumes after closing the tab. It is cleared when a run ends.
 
+## Languages
+
+On first launch the game follows your browser language. Switch it at any time in Settings, or with the EN / УКР buttons on the title screen; the current screen, even a battle in progress, redraws in place.
+
+All text lives in `src/i18n/`:
+
+- `en.ts` is the source dictionary. Data text (units, weapons, islands…) is keyed by the data id.
+- `uk.ts` is the Ukrainian translation. The type checker rejects missing, extra or wrongly shaped keys, and `tests/i18n.test.ts` checks placeholders, markup and plural forms.
+- `glossary.uk.md` fixes the Ukrainian terminology and style.
+
+To add a language, translate `uk.ts` into a new file, register it in `LANGS` in `src/i18n/index.ts` and in the test, and add a font subset in `src/main.ts` if its script needs one (Chakra Petch covers Latin, Tektur adds Cyrillic).
+
 ## Controls
 
 | Input | Action |
@@ -78,4 +92,5 @@ Four islands (Verdant Reach, Dune Sprawl, Glacier Spire, Cinder Works) with thei
 - `src/game/campaign/` — islands, missions, rewards, shop, hangar, pilots, and save slots.
 - `src/render/` — the isometric canvas renderer, procedural sprites, particles and the animation player that replays recorded battle steps.
 - `src/ui/` — screens (title, squad select, world map, island map, battle HUD, shop, end screens) and modals (hangar, saves, results, settings, help).
+- `src/i18n/` — dictionaries, plural rules and lookups for data names; the game logic only hands out ids and message keys.
 - `src/audio/` — WebAudio synthesizer for sound effects and music.

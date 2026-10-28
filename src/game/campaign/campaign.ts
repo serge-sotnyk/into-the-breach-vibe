@@ -10,10 +10,11 @@ import type {
   Pilot,
   RegionState,
   Reward,
+  Note,
   ShopItem,
   Unit,
 } from '../types';
-import { FINAL_ISLAND, HAZARDS, ISLANDS, objectiveLabel, type IslandDef } from '../data/islands';
+import { FINAL_ISLAND, ISLANDS, type IslandDef } from '../data/islands';
 import { LEVEL_XP, PILOT_POOL, levelFor } from '../data/pilots';
 import { SQUADS } from '../data/squads';
 import { ARMORY, WEAPONS } from '../data/weapons';
@@ -24,10 +25,10 @@ import { createBattle, type BattleSetup } from '../battle/mapgen';
 
 export const CAMPAIGN_VERSION = 1;
 
-export const DIFFICULTY: Record<Difficulty, { label: string; grid: number; gridMax: number; gridDef: number; alphaMul: number; spawnAdj: number; desc: string }> = {
-  easy: { label: 'Casual', grid: 8, gridMax: 8, gridDef: 25, alphaMul: 0.6, spawnAdj: -1, desc: 'Fewer Vek, sturdier grid. Learn the ropes.' },
-  normal: { label: 'Standard', grid: 7, gridMax: 8, gridDef: 20, alphaMul: 1, spawnAdj: 0, desc: 'The intended experience.' },
-  hard: { label: 'Veteran', grid: 6, gridMax: 7, gridDef: 12, alphaMul: 1.35, spawnAdj: 1, desc: 'More Vek, more Alphas, less margin.' },
+export const DIFFICULTY: Record<Difficulty, { grid: number; gridMax: number; gridDef: number; alphaMul: number; spawnAdj: number }> = {
+  easy: { grid: 8, gridMax: 8, gridDef: 25, alphaMul: 0.6, spawnAdj: -1 },
+  normal: { grid: 7, gridMax: 8, gridDef: 20, alphaMul: 1, spawnAdj: 0 },
+  hard: { grid: 6, gridMax: 7, gridDef: 12, alphaMul: 1.35, spawnAdj: 1 },
 };
 
 /** Islands that must be secured before the final assault unlocks. */
@@ -123,25 +124,7 @@ function objectiveFor(kind: ObjKind, tier: number): Objective {
   }
 }
 
-function briefing(island: IslandDef | typeof FINAL_ISLAND, name: string, kind: MissionKind, boss: string, hazard: string): string {
-  const corp = 'corp' in island ? island.corp : 'the resistance';
-  const lines: string[] = [];
-  if (kind === 'boss') lines.push(`The ${UNITS[boss].name} has surfaced near ${name}. Hold the headquarters until it retreats and ${corp} will hand the island back to you — destroy it for a bonus.`);
-  else if (kind === 'final1') lines.push('Fight through the caldera rim and hold the landing zone while the Breach Bomb is flown in.');
-  else if (kind === 'final2') lines.push('The bomb is armed. Hold the Hive Heart until detonation — whatever it takes.');
-  else
-    lines.push(
-      pick({ rng: name.length * 7919 + boss.length }, [
-        `Vek are tunnelling up beneath ${name}. Keep ${corp}'s buildings powered.`,
-        `Seismic sensors at ${name} show a Vek brood surfacing. Hold the line.`,
-        `${name} is under attack. Civilians are sheltering in the buildings — protect them.`,
-      ]),
-    );
-  if (hazard) lines.push(`${HAZARDS[hazard].name}: ${HAZARDS[hazard].desc}`);
-  return lines.join(' ');
-}
-
-function genMission(c: Campaign, h: { rng: number }, island: IslandDef, name: string, kind: MissionKind, tier: number): MissionSpec {
+function genMission(c: Campaign, h: { rng: number }, island: IslandDef, kind: MissionKind, tier: number): MissionSpec {
   const diff = DIFFICULTY[c.difficulty];
   const turns = kind === 'boss' ? 5 : rnd(h) < 0.5 ? 4 : 5;
   const objectives: Objective[] = [];
@@ -161,7 +144,6 @@ function genMission(c: Campaign, h: { rng: number }, island: IslandDef, name: st
   }
   return {
     id: `m${rint(h, 1e9)}`,
-    name,
     kind,
     seed: rint(h, 2 ** 31),
     theme: island.id,
@@ -175,7 +157,6 @@ function genMission(c: Campaign, h: { rng: number }, island: IslandDef, name: st
     alphaChance: clamp(alphaBase * diff.alphaMul, 0, 0.85),
     psionChance: tier === 0 ? 0.04 : 0.12 + 0.05 * tier,
     boss: kind === 'boss' ? island.boss : '',
-    briefing: briefing(island, name, kind, kind === 'boss' ? island.boss : '', hazard),
   };
 }
 
@@ -192,7 +173,6 @@ function genFinal(c: Campaign, h: { rng: number }): MissionSpec[] {
   const m1: MissionSpec = {
     ...base,
     id: `f1${rint(h, 1e9)}`,
-    name: 'Caldera Rim',
     kind: 'final1',
     seed: rint(h, 2 ** 31),
     turns: 4,
@@ -201,13 +181,10 @@ function genFinal(c: Campaign, h: { rng: number }): MissionSpec[] {
     spawnPlan: [2, 3, 2, 0].map((n) => clamp(n + diff.spawnAdj, 1, 3)),
     maxEnemies: clamp(6 + diff.spawnAdj, 5, 7),
     boss: '',
-    briefing: '',
   };
-  m1.briefing = briefing(FINAL_ISLAND, m1.name, 'final1', '', 'volcanic');
   const m2: MissionSpec = {
     ...base,
     id: `f2${rint(h, 1e9)}`,
-    name: 'Hive Heart',
     kind: 'final2',
     seed: rint(h, 2 ** 31),
     turns: 4,
@@ -216,10 +193,8 @@ function genFinal(c: Campaign, h: { rng: number }): MissionSpec[] {
     spawnPlan: [2, 2, 2, 0].map((n) => clamp(n + diff.spawnAdj, 1, 3)),
     maxEnemies: clamp(6 + diff.spawnAdj, 5, 7),
     boss: FINAL_ISLAND.boss,
-    briefing: '',
     hazard: '',
   };
-  m2.briefing = briefing(FINAL_ISLAND, m2.name, 'final2', FINAL_ISLAND.boss, '');
   return [m1, m2];
 }
 
@@ -234,24 +209,22 @@ export function enterIsland(c: Campaign, index: number): void {
   if (!isl.regions.length) {
     const def = islandDef(isl.id);
     isl.tier = c.secured;
-    const regions: RegionState[] = def.regions.map((name, i) => ({
+    const regions: RegionState[] = Array.from({ length: def.regions }, (_, i) => ({
       id: `${isl.id}-${i}`,
-      name,
       px: REGION_LAYOUT[i][0],
       py: REGION_LAYOUT[i][1],
       boss: false,
       done: false,
-      mission: genMission(c, c, def, name, 'standard', isl.tier),
+      mission: genMission(c, c, def, 'standard', isl.tier),
       result: null,
     }));
     regions.push({
       id: `${isl.id}-hq`,
-      name: def.hq,
       px: HQ_POS[0],
       py: HQ_POS[1],
       boss: true,
       done: false,
-      mission: genMission(c, c, def, def.hq, 'boss', isl.tier),
+      mission: genMission(c, c, def, 'boss', isl.tier),
       result: null,
     });
     isl.regions = regions;
@@ -308,13 +281,16 @@ export function startMission(c: Campaign, spec: MissionSpec): BattleState {
 }
 
 export interface ObjectiveReport {
-  label: string;
+  objective: Objective;
+  /** the leader's unit id, for boss objectives */
+  boss: string;
   success: boolean;
   reward: Reward;
 }
 
 export interface PilotReport {
   name: string;
+  /** unit id of the mech */
   chassis: string;
   xpGained: number;
   level: number;
@@ -326,7 +302,8 @@ export interface PilotReport {
 
 export interface MissionReport {
   victory: boolean;
-  missionName: string;
+  missionKind: MissionKind;
+  regionId: string;
   objectives: ObjectiveReport[];
   rep: number;
   power: number;
@@ -360,7 +337,8 @@ export function applyBattle(c: Campaign, regionId: string, s: BattleState): Miss
   const spec = currentMission(c, regionId);
   const report: MissionReport = {
     victory,
-    missionName: s.title,
+    missionKind: s.kind,
+    regionId,
     objectives: [],
     rep: 0,
     power: 0,
@@ -382,7 +360,7 @@ export function applyBattle(c: Campaign, regionId: string, s: BattleState): Miss
   let recruit = false;
   for (const o of s.objectives) {
     const ok = objectiveSucceeded(s, o);
-    report.objectives.push({ label: objectiveLabel(o, spec?.boss ?? ''), success: ok, reward: o.reward });
+    report.objectives.push({ objective: o, boss: spec?.boss ?? '', success: ok, reward: o.reward });
     if (o.kind !== 'bomb') {
       c.stats.bonusTotal++;
       if (ok) c.stats.bonusDone++;
@@ -416,7 +394,7 @@ export function applyBattle(c: Campaign, regionId: string, s: BattleState): Miss
     const m = c.mechs[u.slot];
     if (!m) continue;
     const p = m.pilot;
-    const pr: PilotReport = { name: p.name, chassis: UNITS[m.chassis].name, xpGained: 0, level: p.level, leveled: false, died: false, ejected: false, ai: p.ai };
+    const pr: PilotReport = { name: p.name, chassis: m.chassis, xpGained: 0, level: p.level, leveled: false, died: false, ejected: false, ai: p.ai };
     if (u.dead) {
       if (p.ai) {
         // the autopilot is simply rebooted
@@ -470,7 +448,7 @@ export function applyBattle(c: Campaign, regionId: string, s: BattleState): Miss
         c.grid++;
         report.power += 1;
       }
-      report.islandSecured = islandDef(isl.id).name;
+      report.islandSecured = isl.id;
       c.shop = genShop(c);
       c.phase = 'shop';
     }
@@ -543,30 +521,30 @@ export function freeCores(c: Campaign): number {
   return c.cores - allocatedCores(c);
 }
 
-export function equipWeapon(c: Campaign, mech: number, slot: number, invIndex: number): string {
+export function equipWeapon(c: Campaign, mech: number, slot: number, invIndex: number): Note {
   const m = c.mechs[mech];
   const id = c.inventory[invIndex];
-  if (!m || !id) return 'Invalid selection';
+  if (!m || !id) return 'hangar.err.invalid';
   const prev = m.weapons[slot];
   const refund = prev ? weaponCost(prev.id, prev.up) : 0;
-  if (freeCores(c) + refund < WEAPONS[id].power) return `Needs ${WEAPONS[id].power} free reactor core${WEAPONS[id].power > 1 ? 's' : ''}`;
+  if (freeCores(c) + refund < WEAPONS[id].power) return 'hangar.err.cores';
   c.inventory.splice(invIndex, 1);
   if (prev) c.inventory.push(prev.id);
   m.weapons[slot] = { id, up: [] };
   return '';
 }
 
-export function unequipWeapon(c: Campaign, mech: number, slot: number): string {
+export function unequipWeapon(c: Campaign, mech: number, slot: number): Note {
   const m = c.mechs[mech];
   const w = m?.weapons[slot];
   if (!w) return '';
-  if (m.weapons.filter(Boolean).length <= 1) return 'A mech needs at least one weapon';
+  if (m.weapons.filter(Boolean).length <= 1) return 'hangar.err.lastWeapon';
   c.inventory.push(w.id);
   m.weapons[slot] = null;
   return '';
 }
 
-export function toggleUpgrade(c: Campaign, mech: number, slot: number, upIdx: number): string {
+export function toggleUpgrade(c: Campaign, mech: number, slot: number, upIdx: number): Note {
   const w = c.mechs[mech]?.weapons[slot];
   if (!w) return '';
   const def = WEAPONS[w.id].up[upIdx];
@@ -575,7 +553,7 @@ export function toggleUpgrade(c: Campaign, mech: number, slot: number, upIdx: nu
     w.up[upIdx] = false;
     return '';
   }
-  if (freeCores(c) < def.cost) return `Needs ${def.cost} free reactor core${def.cost > 1 ? 's' : ''}`;
+  if (freeCores(c) < def.cost) return 'hangar.err.cores';
   w.up[upIdx] = true;
   return '';
 }

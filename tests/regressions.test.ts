@@ -130,7 +130,7 @@ describe('codex review regressions', () => {
     expect(ally.hp).toBe(2);
     const alone = mech(s, 'mortar', 6, 6, ['mortar'], 2);
     alone.skill = 'medic';
-    expect(repairBlock(s, alone)).toBe('Undamaged');
+    expect(repairBlock(s, alone)).toBe('block.undamaged');
   });
 
   it('thrown eggs land like any unit: pods break, acid sticks', () => {
@@ -156,7 +156,7 @@ describe('save robustness', () => {
     setStorage(full);
     expect(storageAvailable()).toBe(false);
     expect(listSlots()[0].status).toBe('ok');
-    expect(writeSlot(1, c, 'x')).toBe('Storage is full');
+    expect(writeSlot(1, c, 'x')).toBe('saves.err.full');
   });
 
   it('damaged slot metadata is rebuilt instead of breaking the menu', () => {

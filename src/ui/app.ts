@@ -4,6 +4,8 @@ import { Sound } from '../audio/audio';
 import { applyBattle, currentMission, enterFinal, enterIsland, leaveShop, newCampaign, startMission, type MissionReport } from '../game/campaign/campaign';
 import { clearResume, loadSettings, readResume, saveSettings, writeResume, type Settings } from '../game/campaign/save';
 import { bind, el, type Handlers } from './dom';
+import { esc } from './common';
+import { setLang, t, type Lang } from '../i18n';
 import { TitleScreen } from './screens/title';
 import { SquadScreen } from './screens/squad';
 import { WorldScreen } from './screens/world';
@@ -19,6 +21,8 @@ export interface Screen {
   frame?(dt: number, t: number): void;
   key?(e: KeyboardEvent): void;
   resize?(): void;
+  /** Redraw text after a language switch; screens without it are re-mounted. */
+  relocalize?(): void;
   /** campaign time accumulates while this screen is active */
   inGame?: boolean;
 }
@@ -46,6 +50,7 @@ export class App {
   private resumeTimer = 0;
 
   start(): void {
+    setLang(this.settings.lang);
     this.sound.setVolumes(this.settings.sfx, this.settings.music);
     window.addEventListener('resize', () => {
       this.renderer.resize();
@@ -148,7 +153,7 @@ export class App {
     return this.modals.length > 0;
   }
 
-  confirm(title: string, body: string, ok = 'Confirm', danger = false): Promise<boolean> {
+  confirm(title: string, body: string, ok = t('common.confirm'), danger = false): Promise<boolean> {
     return new Promise((resolve) => {
       let done = false;
       const finish = (v: boolean): void => {
@@ -158,17 +163,17 @@ export class App {
         resolve(v);
       };
       const h = this.modal(
-        `<div class="h2">${title}</div><p style="max-width:460px;line-height:1.45;color:#c9d3df">${body}</p>
-         <div class="actions"><button class="btn ghost" data-act="no">Cancel</button><button class="btn ${danger ? 'danger' : ''}" data-act="yes">${ok}</button></div>`,
+        `<div class="h2">${esc(title)}</div><p style="max-width:460px;line-height:1.45;color:#c9d3df">${esc(body)}</p>
+         <div class="actions"><button class="btn ghost" data-act="no">${t('common.cancel')}</button><button class="btn ${danger ? 'danger' : ''}" data-act="yes">${esc(ok)}</button></div>`,
         { handlers: { yes: () => finish(true), no: () => finish(false) }, onClose: () => finish(false) },
       );
     });
   }
 
   toast(msg: string, err = false): void {
-    const t = el(`<div class="panel toast ${err ? 'err red' : ''}">${msg}</div>`);
-    this.toastRoot.appendChild(t);
-    setTimeout(() => t.remove(), 2600);
+    const node = el(`<div class="panel toast ${err ? 'err red' : ''}">${esc(msg)}</div>`);
+    this.toastRoot.appendChild(node);
+    setTimeout(() => node.remove(), 2600);
   }
 
   showTooltip(html: string, x: number, y: number): void {
@@ -191,7 +196,7 @@ export class App {
   banner(text: string, sub: string, tone: 'player' | 'enemy' | 'neutral'): void {
     const b = this.bannerEl;
     b.className = `banner ${tone}`;
-    b.innerHTML = `<div class="bar"><div class="t">${text}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`;
+    b.innerHTML = `<div class="bar"><div class="t">${esc(text)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div>`;
     void b.offsetWidth;
     b.classList.add('show');
   }
@@ -200,6 +205,27 @@ export class App {
     this.settings = s;
     saveSettings(s);
     this.sound.setVolumes(s.sfx, s.music);
+  }
+
+  /** Switches the language and redraws the current screen. Modals other than `keep` (the box
+   *  that asked for the switch) are closed, since their text was built in the old language. */
+  setLang(lang: Lang, keep?: HTMLElement): void {
+    this.applySettings({ ...this.settings, lang });
+    setLang(lang);
+    for (const m of [...this.modals]) if (!keep || !m.el.contains(keep)) this.closeModal(m.el);
+    this.hideTooltip();
+    const s = this.screen;
+    if (!s) return;
+    if (s.relocalize) {
+      s.relocalize();
+      return;
+    }
+    s.unmount?.();
+    this.ui.innerHTML = '';
+    this.ui.className = '';
+    this.renderer.setInsets(0, 0, 0, 0);
+    s.mount(this.ui);
+    this.renderer.resize();
   }
 
   // ------------------------------------------------------------------ persistence

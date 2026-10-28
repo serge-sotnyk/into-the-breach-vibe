@@ -43,7 +43,6 @@ export function blankBattle(): BattleState {
     lostReason: '',
     kind: 'standard',
     podTurn: 0,
-    title: 'Test',
     version: 0,
   };
 }

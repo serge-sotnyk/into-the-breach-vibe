@@ -9,6 +9,7 @@ import { BASE, HH, HW, SIDE, screenToTile, surfaceDrop, tileCenter } from './iso
 import { hash01, rgba, shade, theme, type ThemePal } from './themes';
 import { drawBuilding, drawMech, drawMountain, drawPod, drawTrees, drawVek, ell, flame, poly, rrect } from './sprites';
 import { FX } from './fx';
+import { t as tr, tn } from '../i18n';
 
 export interface UnitOverride {
   x: number;
@@ -869,7 +870,7 @@ export class Renderer {
 
   private badge(x: number, y: number, text: string, bg: string, fg = '#fff', size = 13): void {
     const ctx = this.ctx;
-    ctx.font = `700 ${size}px "Chakra Petch", system-ui, sans-serif`;
+    ctx.font = `700 ${size}px "Chakra Petch", Tektur, system-ui, sans-serif`;
     const w = Math.max(18, ctx.measureText(text).width + 10);
     rrect(ctx, x - w / 2, y - size / 2 - 4, w, size + 8, 4, bg, INK, 1.5);
     ctx.fillStyle = fg;
@@ -1024,7 +1025,7 @@ export class Renderer {
       if (th.cancel) {
         const [cx, cy] = tileCenter(e.x, e.y);
         ctx.globalAlpha = 0.9;
-        this.badge(cx + 20, cy - spriteHeight(e) - 4, th.cancel === 'smoke' ? 'SMOKED' : th.cancel === 'frozen' ? 'FROZEN' : th.cancel === 'water' ? 'SUBMERGED' : th.cancel === 'dead' ? 'DIES FIRST' : 'NO TARGET', '#38404c', '#cfe3f2', 10);
+        this.badge(cx + 20, cy - spriteHeight(e) - 4, tr(`badge.${th.cancel === 'edge' ? 'noTarget' : th.cancel}`), '#38404c', '#cfe3f2', 10);
         ctx.globalAlpha = 1;
         continue;
       }
@@ -1086,7 +1087,7 @@ export class Renderer {
     }
     for (const [i, lost] of p.buildingLoss) {
       const [cx, cy] = tileCenter(ix(i), iy(i));
-      this.badge(cx, this.badgeY(s, i, cy) - 24, `-${lost} GRID`, '#b3261e', '#fff', 12);
+      this.badge(cx, this.badgeY(s, i, cy) - 24, tn('badge.grid', lost), '#b3261e', '#fff', 12);
     }
     for (const id of p.deaths) {
       const u = unitById(s, id);
@@ -1259,7 +1260,7 @@ export class Renderer {
         const bx = x0 - 9;
         ell(ctx, bx, y0 + 4.5, 7.5, 7.5, v.focusEnemy === u.id ? ENEMY : '#2a0f10', ENEMY, 1.5);
         ctx.fillStyle = '#fff';
-        ctx.font = '700 10px "Chakra Petch", system-ui';
+        ctx.font = '700 10px "Chakra Petch", Tektur, system-ui';
         ctx.textAlign = 'center';
         ctx.fillText(String(u.plan.order), bx, y0 + 8.5);
       }

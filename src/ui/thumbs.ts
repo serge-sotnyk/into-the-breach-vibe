@@ -10,7 +10,6 @@ export function islandBoard(theme: string, seed: number, objs: ('relay' | 'lab' 
   if (hit) return hit;
   const spec: MissionSpec = {
     id: 'thumb',
-    name: '',
     kind: 'standard',
     seed,
     theme,
@@ -24,7 +23,6 @@ export function islandBoard(theme: string, seed: number, objs: ('relay' | 'lab' 
     alphaChance: 0,
     psionChance: 0,
     boss: '',
-    briefing: '',
   };
   const s = createBattle(spec, { mechs: [], grid: 1, gridMax: 1, gridDef: 0 });
   cache.set(key, s);

@@ -201,7 +201,6 @@ export function createBattle(spec: MissionSpec, setup: BattleSetup): BattleState
     lostReason: '',
     kind: spec.kind,
     podTurn: spec.objectives.some((o) => o.kind === 'pod') ? 2 : 0,
-    title: spec.name,
     version: 0,
   };
 

@@ -2,6 +2,8 @@ import type { Pilot, Reward, Tile } from '../game/types';
 import { UNITS } from '../game/data/units';
 import { WEAPONS, type WeaponDef } from '../game/data/weapons';
 import { SKILLS } from '../game/data/pilots';
+import { t, tn } from '../i18n';
+import { skillDesc, skillName, weaponDesc, weaponName } from '../i18n/names';
 import type { SquadPalette } from '../game/data/squads';
 import { drawMech, drawPortrait, drawVek } from '../render/sprites';
 import { icon } from './icons';
@@ -12,10 +14,10 @@ export function esc(s: string): string {
 
 export function rewardChips(r: Reward): string {
   const out: string[] = [];
-  if (r.rep) out.push(`<span class="chip rep" title="Reputation — spend it in the shop after securing an island">${icon('star')}${r.rep}</span>`);
-  if (r.power) out.push(`<span class="chip power" title="Grid Power">${icon('bolt')}+${r.power}</span>`);
-  if (r.core) out.push(`<span class="chip core" title="Reactor Core — powers weapons and upgrades">${icon('core')}${r.core}</span>`);
-  if (r.pilot) out.push(`<span class="chip pilot" title="Chance of rescuing a time-travelling pilot">${icon('pilot')}?</span>`);
+  if (r.rep) out.push(`<span class="chip rep" title="${esc(t('reward.rep'))}">${icon('star')}${r.rep}</span>`);
+  if (r.power) out.push(`<span class="chip power" title="${esc(t('reward.power'))}">${icon('bolt')}+${r.power}</span>`);
+  if (r.core) out.push(`<span class="chip core" title="${esc(t('reward.core'))}">${icon('core')}${r.core}</span>`);
+  if (r.pilot) out.push(`<span class="chip pilot" title="${esc(t('reward.pilot'))}">${icon('pilot')}?</span>`);
   return out.join('');
 }
 
@@ -38,30 +40,29 @@ export function pips(hp: number, max: number, enemy = false): string {
 export function weaponStats(w: WeaponDef): string {
   const bits: string[] = [];
   if (w.kind === 'chain' || w.kind === 'melee' || w.kind === 'projectile' || w.kind === 'artillery' || w.kind === 'laser' || w.kind === 'charge' || w.kind === 'throw' || w.kind === 'leap') {
-    if (w.cluster) bits.push(`${w.dmg} dmg around target`);
-    else if (w.dmg > 0) bits.push(`${w.dmg}${w.decay ? '→1' : ''} dmg`);
-  } else if (w.dmg > 0) bits.push(`${w.dmg} dmg`);
-  if (w.push) bits.push('push');
-  if (w.pushAdj) bits.push('push adjacent');
-  if (w.kind === 'grav' || w.kind === 'pull') bits.push('pull');
-  if (w.fire) bits.push('fire');
-  if (w.acid) bits.push('acid');
-  if (w.freeze) bits.push('freeze');
-  if (w.smoke || w.smokeBehind) bits.push('smoke');
-  if (w.flip) bits.push('reverse attack');
-  if (w.kind === 'swap') bits.push(`teleport ${w.range}`);
-  if (w.kind === 'shieldArt') bits.push('shields');
-  if (w.kind === 'wind') bits.push('push all');
-  if (w.selfDmg) bits.push(`${w.selfDmg} self dmg`);
-  if (w.safeB) bits.push('safe for buildings');
-  if (w.uses > 0) bits.push(`${w.uses} use${w.uses > 1 ? 's' : ''}`);
+    if (w.cluster) bits.push(t('ws.dmgAround', { n: w.dmg }));
+    else if (w.dmg > 0) bits.push(t(w.decay ? 'ws.dmgDecay' : 'ws.dmg', { n: w.dmg }));
+  } else if (w.dmg > 0) bits.push(t('ws.dmg', { n: w.dmg }));
+  if (w.push) bits.push(t('ws.push'));
+  if (w.pushAdj) bits.push(t('ws.pushAdj'));
+  if (w.kind === 'grav' || w.kind === 'pull') bits.push(t('ws.pull'));
+  if (w.fire) bits.push(t('ws.fire'));
+  if (w.acid) bits.push(t('ws.acid'));
+  if (w.freeze) bits.push(t('ws.freeze'));
+  if (w.smoke || w.smokeBehind) bits.push(t('ws.smoke'));
+  if (w.flip) bits.push(t('ws.reverse'));
+  if (w.kind === 'swap') bits.push(t('ws.teleport', { n: w.range }));
+  if (w.kind === 'shieldArt') bits.push(t('ws.shields'));
+  if (w.kind === 'wind') bits.push(t('ws.pushAll'));
+  if (w.selfDmg) bits.push(t('ws.selfDmg', { n: w.selfDmg }));
+  if (w.safeB) bits.push(t('ws.safeB'));
+  if (w.uses > 0) bits.push(tn('ws.uses', w.uses));
   return bits.join(' · ');
 }
 
 export function weaponTooltip(id: string): string {
-  const w = WEAPONS[id];
-  if (!w) return '';
-  return `${esc(w.name)}\n${w.desc}`;
+  if (!WEAPONS[id]) return '';
+  return `${esc(weaponName(id))}\n${esc(weaponDesc(id))}`;
 }
 
 export function spriteCanvas(def: string, pal: SquadPalette, px: number, scale = 1, t = 0.5): HTMLCanvasElement {
@@ -97,43 +98,18 @@ export function portraitCanvas(p: Pilot, px: number, accent: string): HTMLCanvas
 }
 
 export function skillLine(p: Pilot): string {
-  if (p.ai) return '<span class="dim">Autopilot — no skill, cannot gain experience</span>';
-  const s = SKILLS[p.skill];
-  return s ? `<b class="amber">${esc(s.name)}</b> <span class="dim">— ${esc(s.desc)}</span>` : '';
+  if (p.ai) return `<span class="dim">${t('pilot.autopilotLine')}</span>`;
+  return SKILLS[p.skill] ? `<b class="amber">${esc(skillName(p.skill))}</b> <span class="dim">— ${esc(skillDesc(p.skill))}</span>` : '';
 }
 
-export const TERRAIN_INFO: Record<string, [string, string]> = {
-  ground: ['Ground', 'Open terrain.'],
-  rubble: ['Rubble', 'Ruins of a building or mountain. Walkable.'],
-  building: ['Civilian Building', 'Every point of damage drains 1 Grid Power. Bumping units into it damages it too!'],
-  mountain: ['Mountain', 'Blocks movement and shots. Destroyed after 2 damage.'],
-  water: ['Water', 'Non-flying Vek drown. Mechs survive but cannot fire weapons while submerged. Extinguishes fire.'],
-  chasm: ['Chasm', 'Any non-flying unit that enters falls to its doom — mechs included.'],
-  forest: ['Forest', 'Bursts into flames when damaged.'],
-  sand: ['Sand', 'Turns into a cloud of smoke when damaged.'],
-  ice: ['Ice', 'Cracks when damaged, then shatters into water.'],
-  lava: ['Lava', 'Non-flying Vek are destroyed. Mechs survive but catch fire and cannot fire weapons.'],
-};
-
-export function tileExtras(t: Tile): string[] {
+export function tileExtras(tl: Tile): string[] {
   const out: string[] = [];
-  if (t.fire) out.push('<span class="tt-warn">On fire</span> — units here catch fire and take 1 damage each turn.');
-  if (t.smoke) out.push('<b>Smoke</b> — units inside cannot attack or repair.');
-  if (t.acid) out.push('<span class="green">A.C.I.D. pool</span> — the next unit to stop here takes double weapon damage.');
-  if (t.shield === 'shield') out.push('<span class="cyan">Shielded</span> — blocks the next instance of damage.');
-  if (t.shield === 'ice') out.push('<span class="cyan">Frozen</span> — the ice absorbs the next hit.');
-  if (t.pod) out.push('<span class="cyan">Time Pod</span> — move a mech here to recover it. Vek will destroy it.');
-  if (t.spawn) out.push('<span class="tt-warn">Vek emerging!</span> Stand here to block it (the blocker takes 1 damage).');
+  if (tl.fire) out.push(t('tile.fire'));
+  if (tl.smoke) out.push(t('tile.smoke'));
+  if (tl.acid) out.push(t('tile.acid'));
+  if (tl.shield === 'shield') out.push(t('tile.shield'));
+  if (tl.shield === 'ice') out.push(t('tile.ice'));
+  if (tl.pod) out.push(t('tile.pod'));
+  if (tl.spawn) out.push(t('tile.spawn'));
   return out;
-}
-
-export function fmtTime(ms: number): string {
-  const m = Math.floor(ms / 60000);
-  const h = Math.floor(m / 60);
-  return h ? `${h}h ${m % 60}m` : `${m}m`;
-}
-
-export function fmtDate(t: number): string {
-  const d = new Date(t);
-  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
 }
